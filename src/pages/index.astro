@@ -1,0 +1,25 @@
+---
+import '../styles/global.css';
+import App from '../components/App.tsx';
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+		<title>Thermomixer — Recipe → TM7 converter</title>
+	</head>
+	<body class="min-h-screen bg-slate-50 text-slate-900">
+		<main class="mx-auto max-w-5xl px-4 py-8">
+			<header class="mb-8 text-center">
+				<h1 class="text-3xl font-extrabold tracking-tight text-emerald-700">🍲 Thermomixer</h1>
+				<p class="mt-1 text-slate-600">
+					Turn any recipe into a working Thermomix&nbsp;TM7 recipe — with copy-paste fields for Cookidoo.
+				</p>
+			</header>
+			<App client:load />
+		</main>
+	</body>
+</html>
