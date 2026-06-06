@@ -52,3 +52,12 @@ and AI suggestions for unmapped steps.
   the **photo** or **paste-text** options for those.
 - Converted settings are sensible starting points you tweak in the editor, not
   guaranteed bakes. Always sanity-check before cooking.
+
+## Disclaimer
+
+Not affiliated with, endorsed by, or connected to Vorwerk, Thermomix®, or
+Cookidoo®. "Thermomix" and "Cookidoo" are trademarks of their respective owners.
+
+## License
+
+[MIT](./LICENSE) © Chuck Carpenter

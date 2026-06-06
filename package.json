@@ -2,6 +2,13 @@
   "name": "thermomixer",
   "type": "module",
   "version": "0.0.1",
+  "description": "Convert any recipe into a working Thermomix TM7 recipe, with copy-paste fields for Cookidoo.",
+  "license": "MIT",
+  "author": "Chuck Carpenter",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chuckcarpenter/thermomixer.git"
+  },
   "engines": {
     "node": ">=22.12.0"
   },
