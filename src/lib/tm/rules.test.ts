@@ -61,6 +61,11 @@ describe('matchRule — known conversions', () => {
   it('spiralize → Cutter+ spiral accessory', () => {
     expect(matchRule('Spiralize the courgette')?.setting.mode).toBe('spiralizer');
   });
+
+  it('sous vide → sous-vide mode (vacuum + sensor)', () => {
+    const s = matchRule('Sous vide the salmon at 50°C')?.setting;
+    expect(s?.mode).toBe('sousvide');
+  });
 });
 
 describe('guardrails', () => {

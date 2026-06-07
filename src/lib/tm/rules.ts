@@ -47,6 +47,13 @@ export const RULES: Rule[] = [
     setting: { tempC: 37, timeSec: 30 * MIN, speed: 0, mode: 'warmup' },
     note: 'Warm proving at 37 °C (or rest outside the bowl)',
   },
+  {
+    id: 'sousvide',
+    label: 'sous vide',
+    test: kw('sous vide', 'sous-vide'),
+    setting: { tempC: 60, timeSec: 60 * MIN, speed: 0, mode: 'sousvide' },
+    note: 'Vacuum bag + Blade Cover & Bimby Sensor — set temp to your protein',
+  },
 
   // --- Aeration (butterfly whisk) ---------------------------------------
   {
