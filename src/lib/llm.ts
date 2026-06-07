@@ -22,7 +22,9 @@ const env = (k: string) => process.env[k] ?? (import.meta.env as any)?.[k];
 
 const API_KEY = env('OPENCODE_ZEN_API_KEY') ?? env('AI_API_KEY') ?? env('OPENAI_API_KEY');
 const BASE_URL = env('AI_BASE_URL') ?? 'https://opencode.ai/zen/v1';
-const MODEL = env('AI_MODEL') ?? 'claude-sonnet-4-5';
+// Haiku is the default: cheap, vision-capable, and fully effective for recipe
+// extraction (verified OCR + JSON). Override with AI_MODEL for more headroom.
+const MODEL = env('AI_MODEL') ?? 'claude-haiku-4-5';
 
 export function hasLLM(): boolean {
   return Boolean(API_KEY);
