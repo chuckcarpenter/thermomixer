@@ -86,14 +86,24 @@ function flattenInstructions(instr: any): string[] {
   }
   const out: string[] = [];
   for (const item of asArray(instr)) {
-    if (typeof item === 'string') out.push(item.trim());
+    if (typeof item === 'string') out.push(tidyStep(item));
     else if (item?.['@type'] === 'HowToSection' && item.itemListElement) {
       out.push(...flattenInstructions(item.itemListElement));
     } else if (item?.text) {
-      out.push(String(item.text).trim());
+      out.push(tidyStep(String(item.text)));
     }
   }
   return out.filter(Boolean);
+}
+
+/** Some recipe plugins (e.g. WordPress Recipe Maker) append an ingredient list
+ * onto the instruction text with no space — "…in the oven.2 c. egg noodles".
+ * A period followed immediately by a digit/fraction is the tell; cut there. */
+export function tidyStep(text: string): string {
+  // A letter/bracket then a period then immediately a digit/fraction = the seam
+  // (real decimals like "1.5" have a digit before the period, so they're safe).
+  const cleaned = text.replace(/([a-zA-Z)\]])([.!?])(?=\d|[½¼¾⅓⅔])[\s\S]*$/, '$1$2');
+  return cleaned.trim();
 }
 
 function pickImage(image: any): string | undefined {

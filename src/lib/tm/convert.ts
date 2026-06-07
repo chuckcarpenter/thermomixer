@@ -11,7 +11,7 @@
  */
 import type { CanonicalRecipe, TMRecipe, TMSetting, TMStep } from './types';
 import { TM7 } from './types';
-import { matchRule, detectOffDevice, parseTemp } from './rules';
+import { matchRule, detectOffDevice, parseTemp, parseDuration } from './rules';
 import { scaleCookTime, scaleIngredients, servingsFactor } from './scale';
 
 export interface ConvertOptions {
@@ -83,10 +83,14 @@ export function convertStep(text: string): { step: TMStep; warnings: string[] } 
     };
   }
 
-  // Prefer an explicit in-range temperature stated in the recipe.
+  // Prefer values explicitly stated in the recipe over the rule's defaults.
   let base: TMSetting = { ...rule.setting };
   if (explicitTemp != null && explicitTemp <= TM7.TEMP_MAX && typeof base.tempC === 'number') {
     base.tempC = explicitTemp;
+  }
+  const explicitTime = parseDuration(text);
+  if (explicitTime != null && base.timeSec != null && base.mode !== 'prep') {
+    base.timeSec = explicitTime;
   }
 
   const { setting, warnings } = applyGuardrails(base);

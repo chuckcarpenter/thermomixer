@@ -211,6 +211,12 @@ export const RULES: Rule[] = [
       'sprinkle',
       'drain',
       'set the butterfly',
+      'spray',
+      'grease',
+      'line the',
+      'cover',
+      'chill',
+      'refrigerate',
     ),
     setting: { mode: 'prep' },
     note: 'No machine action — add ingredients / prep',
@@ -228,27 +234,56 @@ export function matchRule(stepText: string): Rule | null {
   return RULES.find((r) => r.test(text)) ?? null;
 }
 
+// Appliances the TM7 genuinely cannot replace. (A stovetop pan / skillet is NOT
+// here — the TM7 sautés and browns, so those steps convert fine.)
 const OFF_DEVICE = [
-  { re: /\b(pre\s*heat|bake|roast|broil|grill the oven|in the oven)\b/i, what: 'oven' },
-  { re: /\b(deep[-\s]?fry|deep frying)\b/i, what: 'deep-frying' },
-  { re: /\b(barbecue|bbq|grill the|chargrill)\b/i, what: 'grilling' },
-  { re: /\b(frying pan|skillet|griddle|wok)\b/i, what: 'a stovetop pan' },
+  { re: /\b(deep[-\s]?fry|deep[-\s]?frying)\b/i, what: 'deep-frying' },
+  { re: /\b(barbecue|bbq|char-?grill|grill the|on the grill)\b/i, what: 'grilling' },
+  { re: /\b(microwave)\b/i, what: 'a microwave' },
 ];
 
-/** If a step is fundamentally off-device (oven, deep fryer, grill), return a
- * short label describing what's needed; otherwise null. */
+// The oven, as the cooking vessel for THIS step (bake/roast/broil, or "in the
+// oven", "into a 350° oven", "oven for 30 min", "preheat").
+const OVEN_PRIMARY = /\b(bake|roast|broil|pre\s*heat)\b|\b(in|into)\s+(a\s+|the\s+)?(\d{2,3}\s*(°|degrees?)\s*[a-z]*\s+)?oven\b|\boven\s+for\b/i;
+
+// Cues that the oven is a *future / secondary* action, not this step's job
+// (e.g. "these will finish cooking in the oven"). Then the step's real action
+// (boil, mix, …) is what we convert.
+const OVEN_SECONDARY = /\b(will|finish|finishes|finishing|later|then\b.*\boven|after)\b/i;
+
+/** If a step fundamentally needs an appliance the TM7 can't be, return a short
+ * label describing what's needed; otherwise null. */
 export function detectOffDevice(stepText: string): string | null {
   const hit = OFF_DEVICE.find((o) => o.re.test(stepText));
-  return hit ? hit.what : null;
+  if (hit) return hit.what;
+  if (OVEN_PRIMARY.test(stepText) && !OVEN_SECONDARY.test(stepText)) return 'oven';
+  return null;
 }
 
 /** Extract an explicit cooking temperature (°C) mentioned in the text, if any.
- * Handles "180°C", "180 C", "350°F", "350 degrees". Fahrenheit is converted. */
+ * Handles "180°C", "180 C", "350°F", "350 degrees F", "350 degrees".
+ * Fahrenheit is converted; a bare "degrees" (US usage) is treated as °F. */
 export function parseTemp(stepText: string): number | null {
-  const m = stepText.match(/(\d{2,3})\s*°?\s*(c|f|celsius|fahrenheit|degrees?)/i);
+  // Fahrenheit: number, optional ° / "degree(s)", then F / Fahrenheit.
+  const f = stepText.match(/(\d{2,3})\s*(?:°|degrees?)?\s*(?:f|fahrenheit)\b/i);
+  if (f) return Math.round(((parseInt(f[1], 10) - 32) * 5) / 9);
+  // Celsius: number, optional ° / "degree(s)", optional C / Celsius.
+  const c = stepText.match(/(\d{2,3})\s*°\s*(?:c|celsius)?\b/i) ?? stepText.match(/(\d{2,3})\s*degrees?\s*(?:c|celsius)\b/i);
+  if (c) return parseInt(c[1], 10);
+  // Bare "degrees" with no scale → assume Fahrenheit (US recipes).
+  const bare = stepText.match(/(\d{2,3})\s*degrees?\b/i);
+  if (bare) return Math.round(((parseInt(bare[1], 10) - 32) * 5) / 9);
+  return null;
+}
+
+/** Extract an explicit duration in seconds from a step ("for about 6 minutes",
+ * "5-10 mins", "1 hour"), if any. Used to override the rule's default time. */
+export function parseDuration(stepText: string): number | null {
+  const m = stepText.match(/(\d+)\s*(?:to\s*\d+\s*|-\s*\d+\s*)?(hour|hr|minute|min|second|sec)/i);
   if (!m) return null;
-  const value = parseInt(m[1], 10);
+  const n = parseInt(m[1], 10);
   const unit = m[2].toLowerCase();
-  if (unit.startsWith('f')) return Math.round(((value - 32) * 5) / 9);
-  return value;
+  if (unit.startsWith('h')) return n * 3600;
+  if (unit.startsWith('m')) return n * 60;
+  return n;
 }

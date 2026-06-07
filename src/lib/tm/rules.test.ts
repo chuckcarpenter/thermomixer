@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchRule, detectOffDevice, parseTemp } from './rules';
+import { matchRule, detectOffDevice, parseTemp, parseDuration } from './rules';
 import { applyGuardrails, convertStep, convertRecipe } from './convert';
 import { scaleCookTime, scaleIngredients } from './scale';
 import { formatSetting, formatStepLine } from './format';
@@ -89,6 +89,33 @@ describe('off-device + explicit temperature parsing', () => {
 
   it('converts Fahrenheit to Celsius', () => {
     expect(parseTemp('Preheat to 350°F')).toBe(177);
+  });
+
+  it('does NOT flag a step whose oven mention is secondary ("will finish in the oven")', () => {
+    expect(detectOffDevice('Cook the noodles, they will finish cooking in the oven')).toBeNull();
+  });
+
+  it('still flags an oven step with no in-range temperature', () => {
+    expect(detectOffDevice('Cook in a 350 degree F oven for 30 minutes')).toBe('oven');
+  });
+
+  it('does NOT flag a stovetop pan — the TM7 sautés/browns', () => {
+    expect(detectOffDevice('Brown the beef in a skillet')).toBeNull();
+  });
+
+  it('parses Fahrenheit written as "350 degree F"', () => {
+    expect(parseTemp('Cook in a 350 degree F oven')).toBe(177);
+  });
+
+  it('parses explicit "degrees C" as Celsius', () => {
+    expect(parseTemp('Heat to 180 degrees C')).toBe(180);
+  });
+
+  it('parseDuration reads minutes / hours', () => {
+    expect(parseDuration('cook egg noodles for about 6 minutes')).toBe(360);
+    expect(parseDuration('bake for 30 minutes')).toBe(1800);
+    expect(parseDuration('simmer 1 hour')).toBe(3600);
+    expect(parseDuration('5-10 minutes')).toBe(300);
   });
 
   it('a 180°C step becomes an off-device device warning', () => {
@@ -181,5 +208,49 @@ describe('convertRecipe — end to end (pure)', () => {
     expect(out.ingredients[1].quantity).toBe(800); // 400g doubled
     // simmer time (600s default) gets +20% when doubling
     expect(out.tmSteps[2].setting?.timeSec).toBe(720);
+  });
+});
+
+// Baseline regression: https://www.theseoldcookbooks.com/moms-tuna-casserole/
+// A baked casserole — the cookable steps must get real TM7 settings while the
+// genuine oven bake stays flagged off-device. Steps are as produced by ingest
+// (after tidyStep strips the WPRM ingredient bleed).
+describe('baseline — Mom’s Tuna Casserole', () => {
+  const recipe: CanonicalRecipe = {
+    title: "Mom's Tuna Casserole",
+    servings: 6,
+    ingredients: [{ quantity: 2, unit: 'cups', item: 'egg noodles' }],
+    steps: [
+      'Bring a pot of water to boil, and cook egg noodles for about 6 minutes. Drain. These will finish cooking in the oven.',
+      'Spray a 1- 2 quart casserole dish or an 8x8 inch dish with cooking spray.',
+      'Mix together soup, milk, tuna, peas, salt, and drained noodles.',
+      'Pour into casserole dish and top with potato chips.',
+      'Cook in a 350 degree F oven for 30 minutes.',
+    ],
+  };
+
+  const out = convertRecipe(recipe);
+
+  it('converts the noodle-cooking step (not discarded by the oven mention)', () => {
+    const s = out.tmSteps[0];
+    expect(s.needsReview).toBeFalsy();
+    expect(s.setting?.tempC).toBe(100);
+    expect(s.setting?.timeSec).toBe(360); // explicit "6 minutes" beats the default
+  });
+
+  it('marks dish prep as no-machine', () => {
+    expect(out.tmSteps[1].setting?.mode).toBe('prep');
+    expect(out.tmSteps[3].setting?.mode).toBe('prep');
+  });
+
+  it('gives the filling a gentle mixing speed', () => {
+    expect(out.tmSteps[2].setting?.speed).toBe(3);
+    expect(out.tmSteps[2].needsReview).toBeFalsy();
+  });
+
+  it('keeps only the actual oven bake off-device', () => {
+    expect(out.tmSteps[4].needsReview).toBe(true);
+    expect(out.tmSteps[4].setting).toBeUndefined();
+    expect(out.deviceWarnings).toHaveLength(1);
   });
 });
