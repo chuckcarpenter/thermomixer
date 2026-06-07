@@ -27,8 +27,30 @@ export interface TMSetting {
   speed?: Speed;
   /** Reverse blade direction (gentle stirring without chopping). */
   reverse?: boolean;
-  mode?: 'cook' | 'steam' | 'dough' | 'browning' | 'sousvide' | 'blend' | 'warmup' | 'prep';
+  mode?:
+    | 'cook'
+    | 'steam'
+    | 'dough'
+    | 'browning'
+    | 'sousvide'
+    | 'blend'
+    | 'warmup'
+    | 'prep'
+    // Accessory modes (all TM7 accessories assumed available):
+    | 'slicer' // Cutter+ slicing disc
+    | 'grater' // Cutter+ grating disc
+    | 'spiralizer' // Cutter+ spiral disc
+    | 'peeler'; // Blade Cover & Peeler
 }
+
+/** Accessory modes don't use the time/temp/speed dial — they run their own
+ * preset program — so they're rendered by name. */
+export const ACCESSORY_LABELS: Record<string, string> = {
+  slicer: 'Cutter+ (slicing)',
+  grater: 'Cutter+ (grating)',
+  spiralizer: 'Cutter+ (spiralizer)',
+  peeler: 'Blade Cover & Peeler',
+};
 
 export interface TMStep {
   text: string;

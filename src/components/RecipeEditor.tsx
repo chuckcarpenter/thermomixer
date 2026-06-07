@@ -4,6 +4,7 @@
  * Pure state lives in the parent (App); this component just renders + emits.
  */
 import type { TMRecipe, TMSetting, TMStep } from '../lib/tm/types';
+import { ACCESSORY_LABELS } from '../lib/tm/types';
 import { formatIngredient, formatSetting } from '../lib/tm/format';
 
 interface Props {
@@ -99,6 +100,13 @@ function SettingRow({ step, onChange }: { step: TMStep; onChange: (p: Partial<TM
   const s = step.setting;
   if (!s || s.mode === 'prep') {
     return <p class="text-xs italic text-slate-400">No machine action</p>;
+  }
+  if (s.mode && ACCESSORY_LABELS[s.mode]) {
+    return (
+      <span class="inline-block rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">
+        🔧 {formatSetting(s)}
+      </span>
+    );
   }
   return (
     <div class="flex flex-wrap items-center gap-3 text-sm">

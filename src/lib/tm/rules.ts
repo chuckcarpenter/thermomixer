@@ -86,11 +86,34 @@ export const RULES: Rule[] = [
     test: kw('grind', 'mill', 'pulverize', 'pulverise', 'powder'),
     setting: { timeSec: MIN, speed: 10 },
   },
+  // --- Accessories (Cutter+ / Peeler — all accessories assumed available) ---
+  {
+    id: 'peel',
+    label: 'peel',
+    test: kw('peel', 'peeled'),
+    setting: { mode: 'peeler', timeSec: 5 * MIN },
+    note: 'Blade Cover & Peeler — add water, runs hands-free',
+  },
+  {
+    id: 'spiralize',
+    label: 'spiralize',
+    test: kw('spiralize', 'spiralise', 'spiral', 'vegetable ribbons', 'courgette noodles', 'zucchini noodles', 'zoodles'),
+    setting: { mode: 'spiralizer' },
+    note: 'Cutter+ spiral disc',
+  },
+  {
+    id: 'slice',
+    label: 'slice',
+    test: kw('slice', 'sliced', 'thinly slice', 'julienne', 'matchstick', 'baton'),
+    setting: { mode: 'slicer' },
+    note: 'Cutter+ slicing disc (choose thin or thick)',
+  },
   {
     id: 'grate',
-    label: 'grate',
-    test: kw('grate', 'shred'),
-    setting: { timeSec: 8, speed: 8 },
+    label: 'grate / shred',
+    test: kw('grate', 'grated', 'shred', 'shredded'),
+    setting: { mode: 'grater' },
+    note: 'Cutter+ grating disc (fine or coarse)',
   },
   {
     id: 'crush-ice',

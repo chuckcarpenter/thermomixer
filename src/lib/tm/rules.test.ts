@@ -45,6 +45,22 @@ describe('matchRule — known conversions', () => {
   it('returns null for an unmappable step', () => {
     expect(matchRule('Contemplate the meaning of soup')).toBeNull();
   });
+
+  it('slice → Cutter+ slicing accessory', () => {
+    expect(matchRule('Thinly slice the potatoes')?.setting.mode).toBe('slicer');
+  });
+
+  it('grate → Cutter+ grating accessory', () => {
+    expect(matchRule('Grate the cheese')?.setting.mode).toBe('grater');
+  });
+
+  it('peel → Blade Cover & Peeler accessory', () => {
+    expect(matchRule('Peel the carrots')?.setting.mode).toBe('peeler');
+  });
+
+  it('spiralize → Cutter+ spiral accessory', () => {
+    expect(matchRule('Spiralize the courgette')?.setting.mode).toBe('spiralizer');
+  });
 });
 
 describe('guardrails', () => {
@@ -165,6 +181,11 @@ describe('formatting', () => {
 
   it('renders nothing for prep steps', () => {
     expect(formatSetting({ mode: 'prep' })).toBe('');
+  });
+
+  it('renders accessory modes by name', () => {
+    expect(formatSetting({ mode: 'slicer' })).toBe('Cutter+ (slicing)');
+    expect(formatSetting({ mode: 'peeler', timeSec: 300 })).toBe('Blade Cover & Peeler / 5 min');
   });
 
   it('formatStepLine appends the setting after an em dash', () => {

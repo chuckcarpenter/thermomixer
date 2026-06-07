@@ -1,25 +1,35 @@
 /**
- * LLM layer — the *only* place the app talks to a model. Per the hybrid
- * design, the LLM does extraction (vision for photos, parsing messy pages)
- * and proposes settings for steps the rules engine can't map. Everything it
- * returns for a setting is re-validated by `applyGuardrails`, so the model can
- * never emit an unsafe dial.
+ * LLM layer — the ONLY place the app talks to a model.
  *
- * Degrades gracefully: if ANTHROPIC_API_KEY is unset, the helpers return null
- * and callers fall back to non-LLM behaviour.
+ * Uses an OpenAI-compatible client so it works with any gateway. It defaults to
+ * **opencode Zen** (https://opencode.ai/zen/v1), a curated OpenAI-compatible
+ * gateway (GPT-5 / Claude / Gemini / Qwen / …). Configure via env:
+ *   OPENCODE_ZEN_API_KEY  — your key (or AI_API_KEY / OPENAI_API_KEY)
+ *   AI_BASE_URL           — gateway base URL (default opencode Zen)
+ *   AI_MODEL              — a model id the gateway exposes (vision-capable for
+ *                           photo import; see opencode `/models`)
+ *
+ * Per the hybrid design the LLM only does extraction (vision for photos,
+ * parsing messy pages) and proposes settings for steps the rules can't map —
+ * and every proposed setting is re-validated by applyGuardrails, so the model
+ * can never emit an unsafe dial. Degrades gracefully: no key → helpers return
+ * null and callers fall back to non-LLM behaviour.
  */
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import type { CanonicalRecipe, TMSetting } from './tm/types';
 
-const API_KEY = process.env.ANTHROPIC_API_KEY ?? import.meta.env?.ANTHROPIC_API_KEY;
-const MODEL = process.env.LLM_MODEL ?? import.meta.env?.LLM_MODEL ?? 'claude-sonnet-4-6';
+const env = (k: string) => process.env[k] ?? (import.meta.env as any)?.[k];
+
+const API_KEY = env('OPENCODE_ZEN_API_KEY') ?? env('AI_API_KEY') ?? env('OPENAI_API_KEY');
+const BASE_URL = env('AI_BASE_URL') ?? 'https://opencode.ai/zen/v1';
+const MODEL = env('AI_MODEL') ?? 'claude-sonnet-4-5';
 
 export function hasLLM(): boolean {
   return Boolean(API_KEY);
 }
 
-function client(): Anthropic {
-  return new Anthropic({ apiKey: API_KEY });
+function client(): OpenAI {
+  return new OpenAI({ apiKey: API_KEY, baseURL: BASE_URL });
 }
 
 const RECIPE_SHAPE = `Return ONLY a JSON object, no prose, matching:
@@ -63,26 +73,25 @@ function normalizeRecipe(raw: any, sourceUrl?: string): CanonicalRecipe {
   };
 }
 
+async function complete(content: OpenAI.Chat.ChatCompletionMessageParam['content']): Promise<string> {
+  const res = await client().chat.completions.create({
+    model: MODEL,
+    max_tokens: 2048,
+    messages: [{ role: 'user', content } as OpenAI.Chat.ChatCompletionMessageParam],
+  });
+  return res.choices[0]?.message?.content ?? '';
+}
+
 /** Vision: extract a recipe from a photo/screenshot. */
 export async function extractFromImage(
   base64: string,
-  mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+  mimeType: string,
 ): Promise<CanonicalRecipe | null> {
   if (!hasLLM()) return null;
-  const res = await client().messages.create({
-    model: MODEL,
-    max_tokens: 2048,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `Extract the recipe from this image. ${RECIPE_SHAPE}` },
-        ],
-      },
-    ],
-  });
-  const text = res.content.find((c) => c.type === 'text')?.text ?? '';
+  const text = await complete([
+    { type: 'text', text: `Extract the recipe from this image. ${RECIPE_SHAPE}` },
+    { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
+  ]);
   const raw = parseJson<any>(text);
   return raw ? normalizeRecipe(raw) : null;
 }
@@ -93,17 +102,7 @@ export async function extractFromText(
   sourceUrl?: string,
 ): Promise<CanonicalRecipe | null> {
   if (!hasLLM()) return null;
-  const res = await client().messages.create({
-    model: MODEL,
-    max_tokens: 2048,
-    messages: [
-      {
-        role: 'user',
-        content: `Extract the recipe from the following text. ${RECIPE_SHAPE}\n\n---\n${text.slice(0, 12000)}`,
-      },
-    ],
-  });
-  const out = res.content.find((c) => c.type === 'text')?.text ?? '';
+  const out = await complete(`Extract the recipe from the following text. ${RECIPE_SHAPE}\n\n---\n${text.slice(0, 12000)}`);
   const raw = parseJson<any>(out);
   return raw ? normalizeRecipe(raw, sourceUrl) : null;
 }
@@ -112,22 +111,16 @@ export async function extractFromText(
  * MUST still be passed through applyGuardrails by the caller. */
 export async function suggestSetting(stepText: string): Promise<TMSetting | null> {
   if (!hasLLM()) return null;
-  const res = await client().messages.create({
-    model: MODEL,
-    max_tokens: 512,
-    messages: [
-      {
-        role: 'user',
-        content: `You are a Thermomix TM7 expert. For this single recipe step, propose the dial setting.
+  const out = await complete(`You are a Thermomix TM7 expert. Assume ALL accessories are available
+(Cutter+ for slicing/grating/spiralizing, Blade Cover & Peeler, butterfly whisk, Varoma).
+For this single recipe step, propose the setting.
 Step: "${stepText}"
 
-Return ONLY JSON: { "timeSec": number|null, "tempC": number|"Varoma"|null, "speed": number|"dough"|null, "reverse": boolean, "mode": "cook"|"steam"|"dough"|"browning"|"sousvide"|"blend"|"warmup"|"prep" }
-Rules: temperature 37–160 °C only; speed 0–10; use "Varoma" for steaming; use "dough" speed for kneading; if the step is just prep/adding ingredients use mode "prep" with no time/temp/speed.`,
-      },
-    ],
-  });
-  const text = res.content.find((c) => c.type === 'text')?.text ?? '';
-  const raw = parseJson<any>(text);
+Return ONLY JSON: { "timeSec": number|null, "tempC": number|"Varoma"|null, "speed": number|"dough"|null, "reverse": boolean, "mode": "cook"|"steam"|"dough"|"browning"|"sousvide"|"blend"|"warmup"|"prep"|"slicer"|"grater"|"spiralizer"|"peeler" }
+Rules: temperature 37–160 °C only; speed 0–10; "Varoma" for steaming; "dough" speed for kneading;
+use accessory modes (slicer/grater/spiralizer/peeler) for cutting/peeling — they need no time/temp/speed;
+if the step is just prep/adding ingredients use mode "prep" with no time/temp/speed.`);
+  const raw = parseJson<any>(out);
   if (!raw) return null;
   const setting: TMSetting = {};
   if (typeof raw.timeSec === 'number') setting.timeSec = raw.timeSec;

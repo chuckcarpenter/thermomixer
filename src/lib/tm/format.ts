@@ -3,6 +3,7 @@
  * Pure; shared by the UI, the Cookidoo copy panel, and the Markdown export.
  */
 import type { Ingredient, TMRecipe, TMSetting } from './types';
+import { ACCESSORY_LABELS } from './types';
 
 /** Format seconds as "45 sec" or "8 min" or "1 min 30 sec". */
 export function formatTime(sec: number): string {
@@ -16,6 +17,12 @@ export function formatTime(sec: number): string {
  * Returns "" for pure-prep steps (no machine action). */
 export function formatSetting(setting?: TMSetting): string {
   if (!setting || setting.mode === 'prep') return '';
+  // Accessory modes run a preset program — render by name (+ time if given).
+  if (setting.mode && ACCESSORY_LABELS[setting.mode]) {
+    const acc = [ACCESSORY_LABELS[setting.mode]];
+    if (setting.timeSec != null) acc.push(formatTime(setting.timeSec));
+    return acc.join(' / ');
+  }
   const parts: string[] = [];
   if (setting.timeSec != null) parts.push(formatTime(setting.timeSec));
   if (setting.tempC != null) parts.push(setting.tempC === 'Varoma' ? 'Varoma' : `${setting.tempC}°C`);

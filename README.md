@@ -9,7 +9,7 @@ get copy-paste-ready fields for adding them to **Cookidoo**.
 ```
 URL  ──► fetch + JSON-LD parse ─┐
                                 ├─► CanonicalRecipe ─► rules engine ─► TMRecipe ─► editor + Cookidoo panel
-photo ─► Claude vision extract ─┘                       (+ LLM fallback for odd steps)
+photo ─► vision extract ────────┘                       (+ LLM fallback for odd steps)
 ```
 
 - **Conversion is deterministic.** A rules engine (`src/lib/tm/rules.ts`) maps
@@ -17,6 +17,8 @@ photo ─► Claude vision extract ─┘                       (+ LLM fallback 
   / reverse, knead → dough mode, …) and enforces the device's real limits
   (temps clamped to 37–160 °C, steaming ≤ speed 5, off-device steps like
   "bake in the oven" flagged rather than faked).
+- **All TM7 accessories are assumed available.** Slice / grate / spiralize map
+  to the **Cutter+**, and "peel" to the **Blade Cover & Peeler**.
 - **The LLM only does extraction** (vision for photos, parsing pages with no
   structured data) and proposes settings for steps the rules can't map — and
   every such suggestion is re-validated by the same guardrails.
@@ -30,13 +32,17 @@ Requires **Node ≥ 22.12** (this machine's default `node` is older — use
 
 ```sh
 npm install
-cp .env.example .env   # optional: add ANTHROPIC_API_KEY for photos + AI fallback
+cp .env.example .env   # optional: add a key for photo/AI features
 npm run dev            # http://localhost:4321
 ```
 
-The rules-based conversion and URL import work **without** an API key. A key
-unlocks: photo import (vision), the fallback for sites with no structured data,
+The rules-based conversion and URL import work **without** any key. A key
+unlocks photo import (vision), the fallback for sites with no structured data,
 and AI suggestions for unmapped steps.
+
+AI runs through any **OpenAI-compatible** gateway, defaulting to
+[opencode Zen](https://opencode.ai/zen) — set `OPENCODE_ZEN_API_KEY` (and
+optionally `AI_BASE_URL` / `AI_MODEL`). See `.env.example`.
 
 ## Scripts
 
