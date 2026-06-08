@@ -40,9 +40,11 @@ The rules-based conversion and URL import work **without** any key. A key
 unlocks photo import (vision), the fallback for sites with no structured data,
 and AI suggestions for unmapped steps.
 
-AI runs through any **OpenAI-compatible** gateway, defaulting to
-[opencode Zen](https://opencode.ai/zen) — set `OPENCODE_ZEN_API_KEY` (and
-optionally `AI_BASE_URL` / `AI_MODEL`). See `.env.example`.
+AI runs through any **OpenAI-compatible** gateway, defaulting to the
+[Vercel AI Gateway](https://vercel.com/docs/ai-gateway) (native usage
+observability + spend caps) — set `AI_GATEWAY_API_KEY` (and optionally
+`AI_BASE_URL` / `AI_MODEL`). Swap to another gateway (e.g. opencode Zen) by
+overriding those. See `.env.example`.
 
 ## Scripts
 

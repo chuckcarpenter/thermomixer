@@ -2,12 +2,13 @@
  * LLM layer — the ONLY place the app talks to a model.
  *
  * Uses an OpenAI-compatible client so it works with any gateway. It defaults to
- * **opencode Zen** (https://opencode.ai/zen/v1), a curated OpenAI-compatible
- * gateway (GPT-5 / Claude / Gemini / Qwen / …). Configure via env:
- *   OPENCODE_ZEN_API_KEY  — your key (or AI_API_KEY / OPENAI_API_KEY)
- *   AI_BASE_URL           — gateway base URL (default opencode Zen)
- *   AI_MODEL              — a model id the gateway exposes (vision-capable for
- *                           photo import; see opencode `/models`)
+ * the **Vercel AI Gateway** (https://ai-gateway.vercel.sh/v1) for native usage
+ * observability + spend caps, but works with any OpenAI-compatible gateway
+ * (e.g. opencode Zen) by overriding the env. Configure via env:
+ *   AI_GATEWAY_API_KEY  — your key (or OPENCODE_ZEN_API_KEY / AI_API_KEY / OPENAI_API_KEY)
+ *   AI_BASE_URL         — gateway base URL (default Vercel AI Gateway)
+ *   AI_MODEL            — a model id the gateway exposes; Vercel uses
+ *                         `creator/model` slugs, vision-capable for photos
  *
  * Per the hybrid design the LLM only does extraction (vision for photos,
  * parsing messy pages) and proposes settings for steps the rules can't map —
@@ -20,11 +21,12 @@ import type { CanonicalRecipe, TMSetting } from './tm/types';
 
 const env = (k: string) => process.env[k] ?? (import.meta.env as any)?.[k];
 
-const API_KEY = env('OPENCODE_ZEN_API_KEY') ?? env('AI_API_KEY') ?? env('OPENAI_API_KEY');
-const BASE_URL = env('AI_BASE_URL') ?? 'https://opencode.ai/zen/v1';
-// Haiku is the default: cheap, vision-capable, and fully effective for recipe
-// extraction (verified OCR + JSON). Override with AI_MODEL for more headroom.
-const MODEL = env('AI_MODEL') ?? 'claude-haiku-4-5';
+const API_KEY =
+  env('AI_GATEWAY_API_KEY') ?? env('OPENCODE_ZEN_API_KEY') ?? env('AI_API_KEY') ?? env('OPENAI_API_KEY');
+const BASE_URL = env('AI_BASE_URL') ?? 'https://ai-gateway.vercel.sh/v1';
+// Vercel AI Gateway uses `creator/model` slugs. Haiku 4.5: cheap, vision-capable,
+// and verified effective for recipe OCR + JSON. Override with AI_MODEL.
+const MODEL = env('AI_MODEL') ?? 'anthropic/claude-haiku-4.5';
 
 export function hasLLM(): boolean {
   return Boolean(API_KEY);
