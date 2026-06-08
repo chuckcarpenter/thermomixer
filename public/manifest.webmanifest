@@ -1,0 +1,17 @@
+{
+  "name": "Thermomixer — Recipe → TM7 converter",
+  "short_name": "Thermomixer",
+  "description": "Convert any recipe into a working Thermomix TM7 recipe, with copy-paste fields for Cookidoo.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f1f5f9",
+  "theme_color": "#047857",
+  "categories": ["food", "lifestyle", "utilities"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+/* Prevent iOS Safari from zooming in when focusing a small input. */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Respect notch / safe areas when installed as a PWA. */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}

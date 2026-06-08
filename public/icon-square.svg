@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Thermomixer">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+  </defs>
+  <!-- full-bleed background (no rounded corners) for maskable / apple-touch -->
+  <rect width="512" height="512" fill="url(#bg2)"/>
+  <!-- content scaled into the maskable safe zone -->
+  <g transform="translate(46 40) scale(0.82)">
+    <g fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity="0.92">
+      <path d="M196 250c-22-26 18-46-4-78"/>
+      <path d="M256 250c-22-26 18-46-4-78"/>
+      <path d="M316 250c-22-26 18-46-4-78"/>
+    </g>
+    <path fill="#ffffff" d="M104 296h304c0 84-68 140-152 140S104 380 104 296Z"/>
+    <ellipse cx="256" cy="296" rx="152" ry="30" fill="#a7f3d0"/>
+    <g fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round">
+      <path d="M104 312c-34 0-34 44 0 44"/>
+      <path d="M408 312c34 0 34 44 0 44"/>
+    </g>
+  </g>
+</svg>
