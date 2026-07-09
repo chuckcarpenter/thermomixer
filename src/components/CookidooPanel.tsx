@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'preact/hooks';
 import type { TMRecipe } from '../lib/tm/types';
 import { formatIngredient, formatStepLine, toMarkdown } from '../lib/tm/format';
+import { MARKETS } from '../lib/cookidoo/markets';
 
 async function writeClipboard(value: string) {
   try {
@@ -122,6 +123,140 @@ function Field({ title, value }: { title: string; value: string }) {
   );
 }
 
+/** Beta: create the recipe directly in the user's Cookidoo via the unofficial
+ * internal API. Credentials are sent once to our server and never stored. */
+function CreateInCookidoo({ recipe }: { recipe: TMRecipe }) {
+  const [open, setOpen] = useState(false);
+  const [market, setMarket] = useState('us');
+  const [mode, setMode] = useState<'password' | 'token'>('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [cookie, setCookie] = useState('');
+  const [busy, setBusy] = useState<null | 'dry' | 'create'>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; url?: string } | null>(null);
+
+  async function submit(dryRun: boolean) {
+    setBusy(dryRun ? 'dry' : 'create');
+    setMsg(null);
+    const auth = mode === 'token' ? { mode, cookie } : { mode, email, password };
+    try {
+      const res = await fetch('/api/cookidoo', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ recipe, market, dryRun, auth }),
+      });
+      const data = await res.json();
+      if (!res.ok) return setMsg({ ok: false, text: data.error ?? 'Failed.' });
+      if (dryRun) {
+        setMsg({ ok: true, text: `${data.message} (${data.preview.ingredients} ingredients, ${data.preview.steps} steps)` });
+      } else {
+        setMsg({ ok: true, text: 'Created in Cookidoo ✓ — open My Recipes → Created Recipes.', url: data.recipeUrl });
+      }
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : 'Request failed' });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const label = 'block text-xs font-medium text-slate-500';
+  const field = 'mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-sm';
+
+  return (
+    <div class="rounded-lg border border-indigo-200 bg-indigo-50/40">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-indigo-800"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span>⚡ Create in my Cookidoo <span class="rounded bg-indigo-200 px-1.5 py-0.5 text-xs">beta</span></span>
+        <span class="text-indigo-400">{open ? '▾' : '▸'}</span>
+      </button>
+
+      {open && (
+        <div class="space-y-3 border-t border-indigo-200 px-3 py-3">
+          <p class="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+            <strong>Unofficial API — use at your own risk.</strong> This uses Cookidoo's internal
+            endpoints (not a public API); they may change or break, and automated access may be
+            against Cookidoo's terms. Requires an active <strong>paid Cookidoo subscription</strong>.
+            Your credentials are sent once to create the recipe and are <strong>never stored</strong>.
+          </p>
+
+          <div>
+            <label class={label}>Market</label>
+            <select class={field} value={market} onChange={(e) => setMarket((e.target as HTMLSelectElement).value)}>
+              {MARKETS.map((m) => (
+                <option value={m.id}>{m.label} ({m.host})</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="flex gap-3 text-sm">
+            <label class="flex items-center gap-1">
+              <input type="radio" checked={mode === 'password'} onChange={() => setMode('password')} />
+              Email + password
+            </label>
+            <label class="flex items-center gap-1">
+              <input type="radio" checked={mode === 'token'} onChange={() => setMode('token')} />
+              Session cookie
+            </label>
+          </div>
+
+          {mode === 'password' ? (
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class={label}>Cookidoo email</label>
+                <input type="email" autocomplete="off" class={field} value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
+              </div>
+              <div>
+                <label class={label}>Password</label>
+                <input type="password" autocomplete="off" class={field} value={password} onInput={(e) => setPassword((e.target as HTMLInputElement).value)} />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label class={label}>
+                <code>_oauth2_proxy</code> cookie (from your logged-in Cookidoo browser tab → DevTools → Application → Cookies)
+              </label>
+              <textarea rows={2} class={field} value={cookie} onInput={(e) => setCookie((e.target as HTMLTextAreaElement).value)} placeholder="paste the _oauth2_proxy value" />
+            </div>
+          )}
+
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy !== null}
+              class="rounded border border-indigo-300 px-3 py-1 text-sm text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+              onClick={() => submit(true)}
+            >
+              {busy === 'dry' ? 'Testing…' : 'Test login (dry run)'}
+            </button>
+            <button
+              type="button"
+              disabled={busy !== null}
+              class="rounded bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              onClick={() => submit(false)}
+            >
+              {busy === 'create' ? 'Creating…' : 'Create in Cookidoo'}
+            </button>
+          </div>
+
+          {msg && (
+            <p class={`rounded p-2 text-sm ${msg.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>
+              {msg.text}{' '}
+              {msg.url && (
+                <a class="underline" href={msg.url} target="_blank" rel="noreferrer">
+                  open recipe
+                </a>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CookidooPanel({ recipe }: { recipe: TMRecipe }) {
   const ingredients = useMemo(() => recipe.ingredients.map(formatIngredient), [recipe]);
   const steps = useMemo(
@@ -152,6 +287,14 @@ export default function CookidooPanel({ recipe }: { recipe: TMRecipe }) {
           Cookidoo → come back → repeat. Settings are already in each step.
         </p>
       </header>
+
+      <CreateInCookidoo recipe={recipe} />
+
+      <div class="flex items-center gap-2 pt-1 text-xs uppercase tracking-wide text-slate-400">
+        <span class="h-px flex-1 bg-slate-200" />
+        or copy in by hand
+        <span class="h-px flex-1 bg-slate-200" />
+      </div>
 
       <div class="space-y-2">
         <Field title="Title" value={recipe.title} />
