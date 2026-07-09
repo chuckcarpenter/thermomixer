@@ -59,6 +59,15 @@ export default function App() {
     }
   }
 
+  // Ingredient/title edits (and metric conversion) become the new baseline, so
+  // a later servings rescale — which re-derives from canonical — keeps them.
+  function onRecipeChange(r: TMRecipe) {
+    setRecipe(r);
+    setCanonical((c) =>
+      c ? { ...c, title: r.title, servings: r.servings, ingredients: r.ingredients } : c,
+    );
+  }
+
   function handlePhoto(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -85,7 +94,7 @@ export default function App() {
         </button>
         {busy && <p class="text-sm text-slate-500">Updating…</p>}
         <div class="grid gap-6 lg:grid-cols-2">
-          <RecipeEditor recipe={recipe} busy={busy} onChange={setRecipe} onServingsChange={onServingsChange} />
+          <RecipeEditor recipe={recipe} busy={busy} onChange={onRecipeChange} onServingsChange={onServingsChange} />
           <CookidooPanel recipe={recipe} />
         </div>
       </div>

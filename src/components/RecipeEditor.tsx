@@ -3,9 +3,10 @@
  * here the user tweaks settings, edits step text, and rescales servings.
  * Pure state lives in the parent (App); this component just renders + emits.
  */
-import type { TMRecipe, TMSetting, TMStep } from '../lib/tm/types';
+import type { Ingredient, TMRecipe, TMSetting, TMStep } from '../lib/tm/types';
 import { ACCESSORY_LABELS } from '../lib/tm/types';
-import { formatIngredient, formatSetting } from '../lib/tm/format';
+import { formatSetting } from '../lib/tm/format';
+import { toMetric, hasImperial } from '../lib/tm/units';
 
 interface Props {
   recipe: TMRecipe;
@@ -52,12 +53,34 @@ export default function RecipeEditor({ recipe, busy, onChange, onServingsChange 
         </label>
       </div>
 
-      {/* Ingredients */}
+      {/* Ingredients — editable; quantities/units fixable in place */}
       <section>
-        <h2 class="mb-2 text-lg font-semibold text-slate-800">Ingredients</h2>
-        <ul class="space-y-1">
-          {recipe.ingredients.map((ing) => (
-            <li class="text-slate-700">• {formatIngredient(ing)}</li>
+        <div class="mb-2 flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-slate-800">Ingredients</h2>
+          {hasImperial(recipe.ingredients) && (
+            <button
+              type="button"
+              class="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+              title="The TM7 has a built-in scale — weigh in grams/ml"
+              onClick={() =>
+                onChange({ ...recipe, ingredients: recipe.ingredients.map(toMetric) })
+              }
+            >
+              ⚖ Convert to metric
+            </button>
+          )}
+        </div>
+        <ul class="space-y-1.5">
+          {recipe.ingredients.map((ing, i) => (
+            <IngredientRow
+              ing={ing}
+              onChange={(patch) => {
+                const ingredients = recipe.ingredients.map((x, idx) =>
+                  idx === i ? { ...x, ...patch } : x,
+                );
+                onChange({ ...recipe, ingredients });
+              }}
+            />
           ))}
         </ul>
       </section>
@@ -155,6 +178,63 @@ function SettingRow({ step, onChange }: { step: TMStep; onChange: (p: Partial<TM
       </span>
     </div>
   );
+}
+
+function IngredientRow({ ing, onChange }: { ing: Ingredient; onChange: (p: Partial<Ingredient>) => void }) {
+  return (
+    <li class="flex items-center gap-1.5">
+      <input
+        type="text"
+        class="w-14 rounded border border-slate-200 px-1.5 py-0.5 text-sm text-slate-700"
+        value={ing.quantity != null ? displayQty(ing.quantity) : ''}
+        placeholder="qty"
+        onChange={(e) => onChange({ quantity: parseQty((e.target as HTMLInputElement).value) })}
+      />
+      <input
+        type="text"
+        class="w-16 rounded border border-slate-200 px-1.5 py-0.5 text-sm text-slate-700"
+        value={ing.unit ?? ''}
+        placeholder="unit"
+        onChange={(e) => onChange({ unit: (e.target as HTMLInputElement).value.trim() || undefined })}
+      />
+      <input
+        type="text"
+        class="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-0.5 text-sm text-slate-700"
+        value={ing.item + (ing.note ? `, ${ing.note}` : '')}
+        onChange={(e) => {
+          const v = (e.target as HTMLInputElement).value;
+          const ci = v.indexOf(',');
+          if (ci > -1) onChange({ item: v.slice(0, ci).trim(), note: v.slice(ci + 1).trim() || undefined });
+          else onChange({ item: v.trim(), note: undefined });
+        }}
+      />
+    </li>
+  );
+}
+
+const QTY_GLYPHS: Record<string, number> = {
+  '⅛': 0.125, '¼': 0.25, '⅓': 1 / 3, '⅜': 0.375, '½': 0.5,
+  '⅝': 0.625, '⅔': 2 / 3, '¾': 0.75, '⅞': 0.875,
+};
+
+function displayQty(n: number): string {
+  if (Number.isInteger(n)) return String(n);
+  const whole = Math.floor(n);
+  const frac = n - whole;
+  const glyph = Object.entries(QTY_GLYPHS).find(([, v]) => Math.abs(frac - v) < 0.02)?.[0];
+  if (glyph) return whole ? `${whole} ${glyph}` : glyph;
+  return String(Math.round(n * 100) / 100);
+}
+
+function parseQty(v: string): number | undefined {
+  const s = v.trim();
+  if (!s) return undefined;
+  const m = s.match(/^(\d+)?\s*([⅛¼⅓⅜½⅝⅔¾⅞])$/);
+  if (m) return (m[1] ? parseInt(m[1], 10) : 0) + QTY_GLYPHS[m[2]];
+  const frac = s.match(/^(\d+)?\s*(\d+)\/(\d+)$/);
+  if (frac) return (frac[1] ? parseInt(frac[1], 10) : 0) + parseInt(frac[2], 10) / parseInt(frac[3], 10);
+  const n = parseFloat(s);
+  return Number.isNaN(n) ? undefined : n;
 }
 
 function numOrUndef(v: string): number | undefined {
