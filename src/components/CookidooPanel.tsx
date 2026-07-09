@@ -1,46 +1,133 @@
 /**
  * Cookidoo manual-entry panel. No API — Cookidoo has none — so this mirrors
- * the fields its "Created Recipes" editor asks for and gives each a copy
- * button. Pasting these in is a ~2-minute job with zero integration risk.
+ * its "Created Recipes" editor. That editor has ONE INPUT PER ingredient and
+ * PER step, so blobs don't paste well: the core flow here is a per-section
+ * "Copy next" stepper — copy an item, paste it in Cookidoo, come back, repeat —
+ * with per-row copy buttons and progress ticks.
  */
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import type { TMRecipe } from '../lib/tm/types';
 import { formatIngredient, formatStepLine, toMarkdown } from '../lib/tm/format';
 
-function CopyButton({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
+async function writeClipboard(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    // Clipboard API can be unavailable (permissions, older WebViews) — fall
+    // back to the legacy textarea trick rather than failing silently.
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+}
+
+function useCopy() {
+  const [copied, setCopied] = useState<string | null>(null);
+  async function copy(id: string, value: string) {
+    await writeClipboard(value);
+    setCopied(id);
+    setTimeout(() => setCopied((c) => (c === id ? null : c)), 1200);
+  }
+  return { copied, copy };
+}
+
+/** A list section (Ingredients / Steps) with a "Copy next" stepper. */
+function CopyList({ title, items }: { title: string; items: string[] }) {
+  const { copied, copy } = useCopy();
+  const [done, setDone] = useState<Set<number>>(new Set());
+  const next = items.findIndex((_, i) => !done.has(i));
+
+  async function copyRow(i: number) {
+    await copy(`${title}-${i}`, items[i]);
+    setDone((d) => new Set(d).add(i));
+  }
+
   return (
-    <button
-      type="button"
-      class="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700"
-      onClick={async () => {
-        await navigator.clipboard.writeText(value);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1200);
-      }}
-    >
-      {copied ? '✓ Copied' : label}
-    </button>
+    <div class="space-y-2">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-sm font-semibold text-slate-700">
+          {title}
+          <span class="ml-2 font-normal text-slate-400">
+            {done.size}/{items.length}
+          </span>
+        </span>
+        <div class="flex gap-2">
+          {done.size > 0 && (
+            <button
+              type="button"
+              class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+              onClick={() => setDone(new Set())}
+            >
+              Reset
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={next === -1}
+            class="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+            onClick={() => copyRow(next)}
+          >
+            {next === -1 ? '✓ All copied' : `Copy next (${next + 1})`}
+          </button>
+        </div>
+      </div>
+      <ol class="divide-y divide-slate-100 rounded border border-slate-200 bg-slate-50">
+        {items.map((item, i) => (
+          <li
+            class={`flex items-center gap-2 px-2 py-1.5 text-sm ${
+              done.has(i) ? 'text-slate-400' : 'text-slate-800'
+            } ${i === next ? 'bg-emerald-50' : ''}`}
+          >
+            <span class="w-5 shrink-0 text-right font-mono text-xs text-slate-400">
+              {done.has(i) ? '✓' : i + 1}
+            </span>
+            <span class="min-w-0 flex-1 truncate" title={item}>
+              {item}
+            </span>
+            <button
+              type="button"
+              class="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:bg-white"
+              onClick={() => copyRow(i)}
+            >
+              {copied === `${title}-${i}` ? '✓' : 'Copy'}
+            </button>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
 function Field({ title, value }: { title: string; value: string }) {
+  const { copied, copy } = useCopy();
   return (
-    <div class="space-y-1">
-      <div class="flex items-center justify-between">
-        <span class="text-sm font-semibold text-slate-700">{title}</span>
-        <CopyButton label="Copy" value={value} />
+    <div class="flex items-center justify-between gap-3 rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
+      <div class="min-w-0">
+        <span class="mr-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</span>
+        <span class="truncate text-sm text-slate-800">{value}</span>
       </div>
-      <pre class="max-h-48 overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-slate-50 p-2 text-sm text-slate-800">
-        {value}
-      </pre>
+      <button
+        type="button"
+        class="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:bg-white"
+        onClick={() => copy(title, value)}
+      >
+        {copied === title ? '✓' : 'Copy'}
+      </button>
     </div>
   );
 }
 
 export default function CookidooPanel({ recipe }: { recipe: TMRecipe }) {
-  const ingredientsText = recipe.ingredients.map(formatIngredient).join('\n');
-  const stepsText = recipe.tmSteps.map((s) => formatStepLine(s.text, s.setting)).join('\n\n');
+  const ingredients = useMemo(() => recipe.ingredients.map(formatIngredient), [recipe]);
+  const steps = useMemo(
+    () => recipe.tmSteps.map((s) => formatStepLine(s.text, s.setting)),
+    [recipe],
+  );
   const markdown = toMarkdown(recipe);
 
   function download(filename: string, content: string, type: string) {
@@ -52,23 +139,27 @@ export default function CookidooPanel({ recipe }: { recipe: TMRecipe }) {
     URL.revokeObjectURL(url);
   }
 
-  const slug = recipe.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'recipe';
+  const slug =
+    recipe.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'recipe';
 
   return (
     <section class="space-y-4 rounded-lg border border-emerald-200 bg-white p-4 shadow-sm">
-      <header class="flex items-center justify-between">
+      <header>
         <h2 class="text-lg font-bold text-emerald-800">Add to Cookidoo</h2>
-        <CopyButton label="Copy all" value={markdown} />
+        <p class="mt-1 text-sm text-slate-600">
+          Cookidoo's editor (<strong>My Recipes → Created Recipes → Create recipe</strong>) has one
+          input per ingredient and per step. Use <strong>Copy next</strong>: copy → paste in
+          Cookidoo → come back → repeat. Settings are already in each step.
+        </p>
       </header>
-      <p class="text-sm text-slate-600">
-        In Cookidoo, open <strong>My Recipes → Created Recipes → Create recipe</strong>, then paste each
-        field below. Steps already include the time / temperature / speed.
-      </p>
 
-      <Field title="Title" value={recipe.title} />
-      {recipe.servings ? <Field title="Portions" value={String(recipe.servings)} /> : null}
-      <Field title="Ingredients (one per line)" value={ingredientsText} />
-      <Field title="Steps" value={stepsText} />
+      <div class="space-y-2">
+        <Field title="Title" value={recipe.title} />
+        {recipe.servings ? <Field title="Portions" value={String(recipe.servings)} /> : null}
+      </div>
+
+      <CopyList title="Ingredients" items={ingredients} />
+      <CopyList title="Steps" items={steps} />
 
       {recipe.deviceWarnings.length > 0 && (
         <div class="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">
@@ -82,6 +173,13 @@ export default function CookidooPanel({ recipe }: { recipe: TMRecipe }) {
       )}
 
       <div class="flex flex-wrap gap-2 pt-2">
+        <button
+          type="button"
+          class="rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50"
+          onClick={() => navigator.clipboard.writeText(markdown)}
+        >
+          📋 Copy all (Markdown)
+        </button>
         <button
           type="button"
           class="rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50"

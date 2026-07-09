@@ -32,6 +32,10 @@ export function formatSetting(setting?: TMSetting): string {
 }
 
 export function formatIngredient(ing: Ingredient): string {
+  // Below a measurable spoon amount, cooks say "pinch" — not "0.06 tsp".
+  if (ing.quantity != null && ing.quantity < 0.1 && /^(tsp|teaspoons?)$/i.test(ing.unit ?? '')) {
+    return ['pinch', ing.item, ing.note ? `(${ing.note})` : ''].filter(Boolean).join(' ').trim();
+  }
   const qty = ing.quantity != null ? formatNumber(ing.quantity) : '';
   return [qty, ing.unit, ing.item, ing.note ? `(${ing.note})` : '']
     .filter(Boolean)
@@ -64,6 +68,18 @@ export function toMarkdown(recipe: TMRecipe): string {
   return lines.join('\n');
 }
 
-function formatNumber(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(n);
+/** Cook-friendly fractions: 0.333… → "⅓", 1.5 → "1 ½", 0.125 → "⅛".
+ * Falls back to a trimmed decimal when nothing matches (e.g. 0.4 → "0.4"). */
+const GLYPHS: Array<[number, string]> = [
+  [1 / 8, '⅛'], [1 / 4, '¼'], [1 / 3, '⅓'], [3 / 8, '⅜'], [1 / 2, '½'],
+  [5 / 8, '⅝'], [2 / 3, '⅔'], [3 / 4, '¾'], [7 / 8, '⅞'],
+];
+
+export function formatNumber(n: number): string {
+  if (Number.isInteger(n)) return String(n);
+  const whole = Math.floor(n);
+  const frac = n - whole;
+  const hit = GLYPHS.find(([v]) => Math.abs(frac - v) < 0.02);
+  if (hit) return whole ? `${whole} ${hit[1]}` : hit[1];
+  return String(Math.round(n * 100) / 100);
 }

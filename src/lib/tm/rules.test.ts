@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { matchRule, detectOffDevice, parseTemp, parseDuration } from './rules';
 import { applyGuardrails, convertStep, convertRecipe } from './convert';
 import { scaleCookTime, scaleIngredients } from './scale';
-import { formatSetting, formatStepLine } from './format';
+import { formatSetting, formatStepLine, formatNumber, formatIngredient } from './format';
 import type { CanonicalRecipe } from './types';
 
 describe('matchRule — known conversions', () => {
@@ -170,6 +170,40 @@ describe('scaling', () => {
 
   it('subtracts ~20% time when halving', () => {
     expect(scaleCookTime(600, 0.5)).toBe(540);
+  });
+
+  it('never rounds a small quantity to 0 (1/8 tsp salt, scaled down)', () => {
+    // Peach-cobbler baseline: 0.125 tsp × 0.4 (5 servings → 2) must stay > 0.
+    const out = scaleIngredients([{ quantity: 0.125, unit: 'tsp', item: 'salt' }], 0.4);
+    expect(out[0].quantity).toBeGreaterThan(0);
+  });
+
+  it('keeps eighth precision for sub-1 quantities', () => {
+    const out = scaleIngredients([{ quantity: 0.75, unit: 'cup', item: 'sugar' }], 0.5);
+    expect(out[0].quantity).toBe(0.375);
+  });
+});
+
+describe('formatNumber — cook-friendly fractions', () => {
+  it('renders common fractions as glyphs', () => {
+    expect(formatNumber(0.125)).toBe('⅛');
+    expect(formatNumber(1 / 3)).toBe('⅓');
+    expect(formatNumber(0.3333333333333333)).toBe('⅓');
+    expect(formatNumber(0.75)).toBe('¾');
+    expect(formatNumber(1.5)).toBe('1 ½');
+  });
+
+  it('falls back to a trimmed decimal', () => {
+    expect(formatNumber(0.4)).toBe('0.4');
+    expect(formatNumber(2)).toBe('2');
+  });
+
+  it('formatIngredient uses fraction glyphs', () => {
+    expect(formatIngredient({ quantity: 1 / 3, unit: 'cup', item: 'sugar' })).toBe('⅓ cup sugar');
+  });
+
+  it('renders sub-measurable tsp amounts as "pinch"', () => {
+    expect(formatIngredient({ quantity: 0.0625, unit: 'tsp', item: 'salt' })).toBe('pinch salt');
   });
 });
 

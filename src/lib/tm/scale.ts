@@ -36,7 +36,10 @@ export function servingsFactor(recipe: CanonicalRecipe, targetServings?: number)
 }
 
 function roundQuantity(q: number): number {
-  // Keep one decimal for small amounts, whole numbers for large.
   if (q >= 10) return Math.round(q);
-  return Math.round(q * 4) / 4; // nearest quarter
+  if (q >= 1) return Math.round(q * 4) / 4; // nearest quarter
+  // Small amounts (spices!): eighth precision, and NEVER round a nonzero
+  // quantity down to 0 — 1/8 tsp of salt scaled down is still a pinch.
+  const eighth = Math.round(q * 8) / 8;
+  return eighth > 0 ? eighth : Math.max(q, 1 / 16);
 }

@@ -102,8 +102,21 @@ function flattenInstructions(instr: any): string[] {
 export function tidyStep(text: string): string {
   // A letter/bracket then a period then immediately a digit/fraction = the seam
   // (real decimals like "1.5" have a digit before the period, so they're safe).
-  const cleaned = text.replace(/([a-zA-Z)\]])([.!?])(?=\d|[½¼¾⅓⅔])[\s\S]*$/, '$1$2');
+  const cleaned = decodeEntities(text).replace(/([a-zA-Z)\]])([.!?])(?=\d|[½¼¾⅓⅔])[\s\S]*$/, '$1$2');
   return cleaned.trim();
+}
+
+/** JSON-LD strings often carry HTML entities verbatim ("it&#39;s", "&amp;"). */
+export function decodeEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
 }
 
 function pickImage(image: any): string | undefined {
@@ -156,8 +169,8 @@ const FRACTIONS: Record<string, number> = { '½': 0.5, '¼': 0.25, '¾': 0.75, '
 /** Light parse of "200g plain flour" / "2 cloves garlic, minced" into parts.
  * Good enough for scaling + display; the user can edit anything off. */
 export function parseIngredientLine(line: string): Ingredient {
-  const text = line.trim();
-  const qm = text.match(/^(\d+\s+\d+\/\d+|\d+\/\d+|\d*\.?\d+|[½¼¾⅓⅔])\s*/);
+  const text = decodeEntities(line.trim());
+  const qm = text.match(/^(\d+\s+\d+\/\d+|\d+\/\d+|\d*\.?\d+|[½¼¾⅓⅔⅛])\s*/);
   let rest = text;
   let quantity: number | undefined;
   if (qm) {
@@ -170,13 +183,26 @@ export function parseIngredientLine(line: string): Ingredient {
     unit = um[1].toLowerCase();
     rest = rest.slice(um[0].length);
   }
+  // Trailing note after a comma — but only a comma OUTSIDE parentheses;
+  // "peaches (sliced, fresh or canned)" must stay intact.
   let note: string | undefined;
-  const ci = rest.indexOf(',');
+  const ci = findTopLevelComma(rest);
   if (ci > -1) {
     note = rest.slice(ci + 1).trim() || undefined;
     rest = rest.slice(0, ci).trim();
   }
   return { quantity, unit, item: rest.trim() || text, note };
+}
+
+function findTopLevelComma(s: string): number {
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (ch === ',' && depth === 0) return i;
+  }
+  return -1;
 }
 
 function parseQuantity(s: string): number | undefined {
