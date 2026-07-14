@@ -46,6 +46,22 @@ describe('matchRule — known conversions', () => {
     expect(matchRule('Contemplate the meaning of soup')).toBeNull();
   });
 
+  it('matches gerund / inflected verb forms', () => {
+    expect(matchRule('Continue stirring and cooking until thick')?.setting.mode).toBe('cook');
+    expect(matchRule('Keep whisking the mixture')?.id).toBe('whip');
+    expect(matchRule('Chopping the carrots roughly')?.id).toBe('chop');
+    expect(matchRule('Dicing the onion')?.id).toBe('chop');
+    expect(matchRule('Simmering gently')?.id).toBe('simmer');
+    expect(matchRule('Grating the parmesan')?.setting.mode).toBe('grater');
+    expect(matchRule('Browning the meat')?.id).toBe('brown');
+  });
+
+  it('inflection does not over-match unrelated words', () => {
+    // "cooker" / "cookie" must not trigger the cook rule
+    expect(matchRule('Place in the slow cooker')?.id).not.toBe('cook');
+    expect(matchRule('Crumble the cookie on top')?.id).not.toBe('cook');
+  });
+
   it('slice → Cutter+ slicing accessory', () => {
     expect(matchRule('Thinly slice the potatoes')?.setting.mode).toBe('slicer');
   });

@@ -19,13 +19,37 @@ export interface Rule {
   note?: string;
 }
 
-/** Build a matcher for any of the given words/phrases, on word boundaries. */
+/** Regex source that matches a single verb plus its common inflections
+ * (-s, -ed, -ing, incl. doubled final consonant and dropped silent-e), so
+ * "cook" also matches "cooks/cooked/cooking", "chop"→"chopping", "dice"→"dicing". */
+function inflect(word: string): string {
+  if (word.endsWith('e')) {
+    const stem = word.slice(0, -1); // dice → dic(ing), grate → grat(ing)
+    return `(?:${word}s?|${word}d|${stem}ing)`;
+  }
+  const last = word[word.length - 1];
+  const prev = word[word.length - 2] ?? '';
+  // Double the final consonant after a single vowel: chop→chopping, stir→stirring.
+  const dbl = 'aeiou'.includes(prev) && !'aeiou'.includes(last) ? `|${last}ing|${last}ed` : '';
+  return `${word}(?:es|s|ed|ing${dbl})?`;
+}
+
+/** Build a matcher for any of the given words/phrases, on word boundaries.
+ * Single words match their inflections; multi-word phrases match verbatim
+ * (with flexible whitespace). */
 function kw(...words: string[]): (text: string) => boolean {
-  const res = words.map((w) => new RegExp(`\\b${w.replace(/\s+/g, '\\s+')}\\b`, 'i'));
+  const res = words.map((w) => {
+    const body = /[\s-]/.test(w) ? w.replace(/\s+/g, '\\s+') : inflect(w);
+    return new RegExp(`\\b${body}\\b`, 'i');
+  });
   return (text: string) => res.some((re) => re.test(text));
 }
 
 const MIN = 60;
+
+// "cooking"/"cooked" as an adjective (cooking spray/oil/liquid, cooked rice)
+// must NOT trigger the cook rule — only the verb should.
+const COOKING_ADJECTIVE = /\bcook(?:ing|ed)\s+(?:spray|oil|liquid|wine|time|fat|water|method|instructions?|rice|pasta|beans?)\b/i;
 
 /**
  * Ordered most-specific → most-general. The first matching rule wins, so
@@ -222,8 +246,9 @@ export const RULES: Rule[] = [
     id: 'cook',
     label: 'cook',
     // "stew"/"braise" omitted: they're usually nouns ("beef stew") and would
-    // false-match plating steps; "simmer"/"cook" cover the real verb.
-    test: kw('cook', 'heat', 'poach'),
+    // false-match plating steps; "simmer"/"cook" cover the real verb. The
+    // adjective guard keeps "cooking spray"/"cooked rice" from cooking.
+    test: (t) => kw('cook', 'heat', 'poach')(t) && !COOKING_ADJECTIVE.test(t),
     setting: { tempC: 100, timeSec: 10 * MIN, speed: 1, reverse: true, mode: 'cook' },
   },
 
