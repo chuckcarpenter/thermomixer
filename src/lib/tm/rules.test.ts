@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { matchRule, detectOffDevice, parseTemp, parseDuration } from './rules';
-import { applyGuardrails, convertStep, convertRecipe } from './convert';
+import { applyGuardrails, convertStep, convertRecipe, applyReview } from './convert';
+import type { StepReview, TMRecipe } from './types';
 import { scaleCookTime, scaleIngredients } from './scale';
 import { formatSetting, formatStepLine, formatNumber, formatIngredient } from './format';
 import type { CanonicalRecipe } from './types';
@@ -327,5 +328,57 @@ describe('baseline — Mom’s Tuna Casserole', () => {
     expect(out.tmSteps[4].needsReview).toBe(true);
     expect(out.tmSteps[4].setting).toBeUndefined();
     expect(out.deviceWarnings).toHaveLength(1);
+  });
+});
+
+describe('applyReview — LLM whole-recipe review merge', () => {
+  const draft: TMRecipe = {
+    title: 'Stew',
+    ingredients: [],
+    steps: ['Add the diced onion', 'Sauté', 'Bake at 200C', 'Simmer'],
+    tmSteps: [
+      { text: 'Add the diced onion', setting: { timeSec: 5, speed: 5 }, note: 'chop' }, // rules wrongly chopped
+      { text: 'Sauté', setting: { tempC: 100, timeSec: 180, speed: 1, reverse: true }, note: 'sauté' },
+      { text: 'Bake at 200C', needsReview: true, note: 'No rule matched' },
+      { text: 'Simmer', setting: { tempC: 95, timeSec: 600, speed: 1, reverse: true }, note: 'simmer' },
+    ],
+    deviceWarnings: [],
+  };
+
+  const reviews: StepReview[] = [
+    { index: 0, action: 'prep' }, // "add the diced onion" is prep, not a chop
+    { index: 1, action: 'machine', setting: { tempC: 100, timeSec: 180, speed: 1, reverse: true } },
+    { index: 2, action: 'offDevice', reason: 'oven bake at 200 °C' },
+    // index 3 omitted → keeps its draft
+  ];
+
+  const out = applyReview(draft, reviews);
+
+  it('reclassifies an "add the diced X" step as prep', () => {
+    expect(out.tmSteps[0].setting?.mode).toBe('prep');
+  });
+
+  it('keeps a correct machine step (re-validated)', () => {
+    expect(out.tmSteps[1].setting?.tempC).toBe(100);
+    expect(out.tmSteps[1].note).toBe('AI-reviewed');
+  });
+
+  it('turns an oven step into an off-device warning', () => {
+    expect(out.tmSteps[2].needsReview).toBe(true);
+    expect(out.tmSteps[2].setting).toBeUndefined();
+    expect(out.deviceWarnings.some((w) => w.includes('oven'))).toBe(true);
+  });
+
+  it('leaves un-reviewed steps on their draft', () => {
+    expect(out.tmSteps[3].setting?.tempC).toBe(95);
+  });
+
+  it('re-validates LLM settings through the guardrails (clamps out-of-range)', () => {
+    const clamp = applyReview(draft, [
+      { index: 1, action: 'machine', setting: { tempC: 250, timeSec: 60, speed: 15 } },
+    ]);
+    expect(clamp.tmSteps[1].setting?.tempC).toBeUndefined(); // 250°C dropped
+    expect(clamp.tmSteps[1].setting?.speed).toBe(10); // speed clamped
+    expect(clamp.deviceWarnings.length).toBeGreaterThan(0);
   });
 });

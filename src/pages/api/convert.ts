@@ -11,8 +11,8 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
-import { convertRecipe, applyGuardrails } from '../../lib/tm/convert';
-import { suggestSetting, hasLLM } from '../../lib/llm';
+import { convertRecipe, applyReview } from '../../lib/tm/convert';
+import { reviewConversion, hasLLM } from '../../lib/llm';
 import type { CanonicalRecipe } from '../../lib/tm/types';
 
 export const POST: APIRoute = async ({ request }) => {
@@ -26,21 +26,18 @@ export const POST: APIRoute = async ({ request }) => {
   const recipe = body.recipe as CanonicalRecipe | undefined;
   if (!recipe?.steps) return json({ error: 'Missing recipe' }, 400);
 
+  // 1. Deterministic rules draft (also the offline / no-key result).
   const tm = convertRecipe(recipe, { targetServings: body.targetServings });
 
+  // 2. Optional whole-recipe LLM review pass — corrects the draft in context,
+  //    then applyReview re-validates every setting through the guardrails.
   if (body.aiFallback && hasLLM()) {
-    await Promise.all(
-      tm.tmSteps.map(async (step) => {
-        // Only fill genuinely-unmapped steps — not off-device ones.
-        if (!step.needsReview || step.note?.startsWith('Off-device')) return;
-        const suggestion = await suggestSetting(step.text);
-        if (!suggestion) return;
-        const { setting } = applyGuardrails(suggestion);
-        step.setting = setting;
-        step.needsReview = false;
-        step.note = 'AI suggestion (review me)';
-      }),
-    );
+    try {
+      const reviews = await reviewConversion(recipe, tm.tmSteps);
+      if (reviews) return json(applyReview(tm, reviews));
+    } catch {
+      // Review failed — fall back to the rules draft below.
+    }
   }
 
   return json(tm);

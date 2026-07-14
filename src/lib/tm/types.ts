@@ -78,6 +78,16 @@ export interface TMRecipe extends CanonicalRecipe {
   deviceWarnings: string[];
 }
 
+/** One step's verdict from the LLM whole-recipe review pass. */
+export interface StepReview {
+  index: number;
+  action: 'machine' | 'prep' | 'offDevice';
+  /** Present when action === 'machine'; re-validated by applyGuardrails. */
+  setting?: TMSetting;
+  /** Present when action === 'offDevice', e.g. "oven bake at 200 °C". */
+  reason?: string;
+}
+
 /** Hard limits of the TM7, used by the guardrails. */
 export const TM7 = {
   TEMP_MIN: 37,

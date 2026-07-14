@@ -9,7 +9,7 @@
  * API layer may optionally ask the LLM to propose a setting, which is then
  * re-validated through the very same `applyGuardrails` here.
  */
-import type { CanonicalRecipe, TMRecipe, TMSetting, TMStep } from './types';
+import type { CanonicalRecipe, StepReview, TMRecipe, TMSetting, TMStep } from './types';
 import { TM7 } from './types';
 import { matchRule, detectOffDevice, parseTemp, parseDuration } from './rules';
 import { scaleCookTime, scaleIngredients, servingsFactor } from './scale';
@@ -128,4 +128,37 @@ export function convertRecipe(recipe: CanonicalRecipe, opts: ConvertOptions = {}
 
 function truncate(s: string, n = 60): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+/** Apply the LLM whole-recipe review to a rules draft. Pure. Every reviewed
+ * machine setting is re-validated through applyGuardrails, so the model can
+ * never bypass the device limits. Steps with no review entry keep their draft. */
+export function applyReview(draft: TMRecipe, reviews: StepReview[]): TMRecipe {
+  const byIndex = new Map(reviews.map((r) => [r.index, r]));
+  const deviceWarnings: string[] = [];
+
+  const tmSteps: TMStep[] = draft.tmSteps.map((step, i) => {
+    const r = byIndex.get(i);
+    if (!r) {
+      // No verdict for this step: keep the draft, and preserve its warning.
+      if (step.needsReview && step.note?.startsWith('Off-device')) {
+        deviceWarnings.push(`"${truncate(step.text)}" — ${step.note.replace(/^Off-device[—-]?\s*/, '')}`);
+      }
+      return step;
+    }
+    if (r.action === 'offDevice') {
+      const reason = r.reason?.trim() || 'the TM7 can’t do this step';
+      deviceWarnings.push(`"${truncate(step.text)}" — ${reason}`);
+      return { text: step.text, needsReview: true, note: `Off-device — ${reason}` };
+    }
+    if (r.action === 'prep') {
+      return { text: step.text, setting: { mode: 'prep' }, note: 'No machine action' };
+    }
+    // machine
+    const { setting, warnings } = applyGuardrails(r.setting ?? {});
+    warnings.forEach((w) => deviceWarnings.push(`"${truncate(step.text)}" ${w}`));
+    return { text: step.text, setting, note: 'AI-reviewed' };
+  });
+
+  return { ...draft, tmSteps, deviceWarnings };
 }

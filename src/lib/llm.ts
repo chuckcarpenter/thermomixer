@@ -17,7 +17,8 @@
  * null and callers fall back to non-LLM behaviour.
  */
 import OpenAI from 'openai';
-import type { CanonicalRecipe, TMSetting } from './tm/types';
+import type { CanonicalRecipe, StepReview, TMSetting, TMStep } from './tm/types';
+import { formatSetting, formatIngredient } from './tm/format';
 
 const env = (k: string) => process.env[k] ?? (import.meta.env as any)?.[k];
 
@@ -133,4 +134,76 @@ if the step is just prep/adding ingredients use mode "prep" with no time/temp/sp
   if (raw.reverse === true) setting.reverse = true;
   if (typeof raw.mode === 'string') setting.mode = raw.mode;
   return setting;
+}
+
+function normalizeSetting(raw: any): TMSetting {
+  const setting: TMSetting = {};
+  if (typeof raw?.timeSec === 'number') setting.timeSec = raw.timeSec;
+  if (raw?.tempC === 'Varoma' || typeof raw?.tempC === 'number') setting.tempC = raw.tempC;
+  if (raw?.speed === 'dough' || typeof raw?.speed === 'number') setting.speed = raw.speed;
+  if (raw?.reverse === true) setting.reverse = true;
+  if (typeof raw?.mode === 'string') setting.mode = raw.mode;
+  return setting;
+}
+
+/** Whole-recipe review: the LLM sees every step (with the rules' draft setting)
+ * plus the ingredient list, and corrects the conversion in context — fixing
+ * verb-vs-adjective ("add the diced onion" = prep), wrong operations, plating,
+ * off-device steps, and unrealistic times. Returns one verdict per step, or
+ * null when unavailable. Verdicts are re-validated by applyReview/applyGuardrails. */
+export async function reviewConversion(
+  recipe: CanonicalRecipe,
+  draft: TMStep[],
+): Promise<StepReview[] | null> {
+  if (!hasLLM()) return null;
+  const ingredients = recipe.ingredients.map(formatIngredient).join('; ') || '(none listed)';
+  const steps = draft
+    .map((s, i) => `${i}. ${s.text}   ⟶ draft: ${s.setting ? formatSetting(s.setting) || 'prep' : 'UNMAPPED'}`)
+    .join('\n');
+
+  const out = await complete(`You are a Thermomix TM7 expert. A recipe was auto-converted to TM7 by
+simple keyword rules; some steps are wrong. Review the WHOLE recipe in context and return the correct
+handling for EACH step.
+
+Assume ALL accessories are available: Cutter+ (slicing/grating/spiralizing), Blade Cover & Peeler,
+butterfly whisk, Varoma, simmering basket.
+
+Recipe: ${recipe.title}
+Ingredients: ${ingredients}
+
+Steps (with the draft the rules assigned):
+${steps}
+
+Return ONLY a JSON array with one object per step, in order:
+{ "index": number,
+  "action": "machine" | "prep" | "offDevice",
+  "setting": { "timeSec": number|null, "tempC": number|"Varoma"|null, "speed": number|"dough"|null, "reverse": boolean, "mode": "cook"|"steam"|"dough"|"browning"|"sousvide"|"blend"|"warmup"|"slicer"|"grater"|"spiralizer"|"peeler"|null },
+  "reason": string }
+Guidance:
+- "machine" = the TM7 actively does it (chop, sauté, simmer, blend, knead, steam, slice, grate, peel…). Fill "setting" (temp 37–160°C only, speed 0–10, "Varoma" to steam, "dough" to knead, accessory modes for cutting/peeling).
+- "prep" = no machine action: ADDING an already-prepared ingredient ("add the diced onion", "pour in the wine"), seasoning to taste, resting, cooling, or plating/serving. Leave "setting" null.
+- "offDevice" = needs equipment the TM7 isn't (oven bake/roast/broil, deep-fry, grill/BBQ). Put the reason in "reason".
+- Keep the draft when it is already correct. Use realistic times (respect any stated in the step).`);
+
+  // The response is a JSON array; extract it tolerantly.
+  const match = out.match(/\[[\s\S]*\]/);
+  if (!match) return null;
+  let arr: any;
+  try {
+    arr = JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(arr)) return null;
+
+  return arr
+    .filter((r) => typeof r?.index === 'number')
+    .map((r): StepReview => {
+      const action: StepReview['action'] =
+        r.action === 'prep' || r.action === 'offDevice' ? r.action : 'machine';
+      const review: StepReview = { index: r.index, action };
+      if (action === 'machine') review.setting = normalizeSetting(r.setting);
+      if (action === 'offDevice' && typeof r.reason === 'string') review.reason = r.reason;
+      return review;
+    });
 }
