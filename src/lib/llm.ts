@@ -78,10 +78,13 @@ function normalizeRecipe(raw: any, sourceUrl?: string): CanonicalRecipe {
   };
 }
 
-async function complete(content: OpenAI.Chat.ChatCompletionMessageParam['content']): Promise<string> {
+async function complete(
+  content: OpenAI.Chat.ChatCompletionMessageParam['content'],
+  maxTokens = 2048,
+): Promise<string> {
   const res = await client().chat.completions.create({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: maxTokens,
     messages: [{ role: 'user', content } as OpenAI.Chat.ChatCompletionMessageParam],
   });
   return res.choices[0]?.message?.content ?? '';
@@ -174,7 +177,9 @@ Ingredients: ${ingredients}
 Steps (with the draft the rules assigned):
 ${steps}
 
-Return ONLY a JSON array with one object per step, in order:
+Return ONLY a JSON array with EXACTLY ${draft.length} objects — one for EVERY step,
+indices 0 to ${draft.length - 1}, in order. Include every step even if you keep its draft.
+Each object:
 { "index": number,
   "action": "machine" | "prep" | "offDevice",
   "setting": { "timeSec": number|null, "tempC": number|"Varoma"|null, "speed": number|"dough"|null, "reverse": boolean, "mode": "cook"|"steam"|"dough"|"browning"|"sousvide"|"blend"|"warmup"|"slicer"|"grater"|"spiralizer"|"peeler"|null },
@@ -184,7 +189,9 @@ Guidance:
 - "machine" = the TM7 actively does it (chop, sauté, brown, simmer, boil, blend, knead, steam, slice, grate, peel…). Fill "setting" (temp 37–160°C only, speed 0–10, "Varoma" to steam, "dough" to knead, accessory modes for cutting/peeling). When unsure between machine and offDevice for a heating step, choose machine.
 - "prep" = no machine action: ADDING an already-prepared ingredient ("add the diced onion", "pour in the wine", "fill with water"), seasoning to taste, resting, cooling, or plating/serving. Leave "setting" null.
 - "offDevice" = ONLY oven (bake/roast/broil), deep-frying, grilling/BBQ, or microwave — nothing else. Put the reason in "reason".
-- Keep the draft when it is already correct. Use realistic times (respect any stated in the step).`);
+- Keep the draft when it is already correct. Use realistic times (respect any stated in the step).`,
+    Math.min(8192, Math.max(2048, draft.length * 220)), // enough room for every step
+  );
 
   // The response is a JSON array; extract it tolerantly.
   const match = out.match(/\[[\s\S]*\]/);
@@ -198,13 +205,15 @@ Guidance:
   if (!Array.isArray(arr)) return null;
 
   return arr
-    .filter((r) => typeof r?.index === 'number')
-    .map((r): StepReview => {
+    .map((r): StepReview | null => {
+      const index = Number(r?.index);
+      if (!Number.isInteger(index)) return null;
       const action: StepReview['action'] =
         r.action === 'prep' || r.action === 'offDevice' ? r.action : 'machine';
-      const review: StepReview = { index: r.index, action };
+      const review: StepReview = { index, action };
       if (action === 'machine') review.setting = normalizeSetting(r.setting);
       if (action === 'offDevice' && typeof r.reason === 'string') review.reason = r.reason;
       return review;
-    });
+    })
+    .filter((r): r is StepReview => r !== null);
 }
