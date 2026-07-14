@@ -139,6 +139,21 @@ describe('off-device + explicit temperature parsing', () => {
     expect(parseDuration('5-10 minutes')).toBe(300);
   });
 
+  it('parseDuration handles decimals and ranges (not "1.5 h" → "5 h")', () => {
+    // Pasta-grammar baseline: "cook for 1 to 1.5 hours" was misread as 5 hours.
+    expect(parseDuration('Partially cover and cook for 1 to 1.5 hours')).toBe(3600);
+    expect(parseDuration('reduce for 1.5 hours')).toBe(5400);
+    expect(parseDuration('Bring 1800 ml water to boil')).toBeNull(); // ml is not time
+  });
+
+  it('plating steps never run the machine ("beef stew" noun ≠ cook)', () => {
+    const serve = matchRule('Serve polenta in slices with beef stew spooned on top');
+    expect(serve?.id).toBe('serve');
+    expect(serve?.setting.mode).toBe('prep');
+    // "stew" as a noun no longer triggers the cook rule
+    expect(matchRule('Ladle the beef stew into bowls')?.setting.mode).toBe('prep');
+  });
+
   it('a 180°C step becomes an off-device device warning', () => {
     const { step, warnings } = convertStep('Heat the oil to 180°C');
     expect(step.needsReview).toBe(true);

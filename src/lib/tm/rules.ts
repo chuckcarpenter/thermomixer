@@ -32,6 +32,29 @@ const MIN = 60;
  * "finely chop" must be tested before "chop", "sauté" before "cook", etc.
  */
 export const RULES: Rule[] = [
+  // --- Plating / finishing (highest priority: never run the machine) -----
+  // Must precede the heat/size rules so "serve … with beef stew on top" or
+  // "divide among plates" is treated as prep, not cooking or slicing.
+  {
+    id: 'serve',
+    label: 'serve / plate',
+    test: kw(
+      'serve',
+      'to serve',
+      'plate',
+      'plating',
+      'ladle',
+      'spooned',
+      'spoon over',
+      'divide among',
+      'divide between',
+      'arrange on',
+      'top with',
+    ),
+    setting: { mode: 'prep' },
+    note: 'Plate / serve — no machine action',
+  },
+
   // --- Dough -------------------------------------------------------------
   {
     id: 'knead',
@@ -198,7 +221,9 @@ export const RULES: Rule[] = [
   {
     id: 'cook',
     label: 'cook',
-    test: kw('cook', 'heat', 'poach', 'stew'),
+    // "stew"/"braise" omitted: they're usually nouns ("beef stew") and would
+    // false-match plating steps; "simmer"/"cook" cover the real verb.
+    test: kw('cook', 'heat', 'poach'),
     setting: { tempC: 100, timeSec: 10 * MIN, speed: 1, reverse: true, mode: 'cook' },
   },
 
@@ -307,13 +332,18 @@ export function parseTemp(stepText: string): number | null {
 }
 
 /** Extract an explicit duration in seconds from a step ("for about 6 minutes",
- * "5-10 mins", "1 hour"), if any. Used to override the rule's default time. */
+ * "5-10 mins", "1 to 1.5 hours", "1 hour"), if any. Handles decimals and takes
+ * the lower bound of a range. Used to override the rule's default time. */
 export function parseDuration(stepText: string): number | null {
-  const m = stepText.match(/(\d+)\s*(?:to\s*\d+\s*|-\s*\d+\s*)?(hour|hr|minute|min|second|sec)/i);
+  // A full number (incl. decimals), an optional "to/-" range, then a unit.
+  // Capturing the whole number prevents "1.5 hours" being read as "5 hours".
+  const m = stepText.match(
+    /(\d+(?:\.\d+)?)\s*(?:(?:to|-|–|—)\s*\d+(?:\.\d+)?\s*)?(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b/i,
+  );
   if (!m) return null;
-  const n = parseInt(m[1], 10);
+  const n = parseFloat(m[1]);
   const unit = m[2].toLowerCase();
-  if (unit.startsWith('h')) return n * 3600;
-  if (unit.startsWith('m')) return n * 60;
-  return n;
+  if (unit.startsWith('h')) return Math.round(n * 3600);
+  if (unit.startsWith('m')) return Math.round(n * 60);
+  return Math.round(n);
 }
