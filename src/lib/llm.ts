@@ -180,9 +180,10 @@ Return ONLY a JSON array with one object per step, in order:
   "setting": { "timeSec": number|null, "tempC": number|"Varoma"|null, "speed": number|"dough"|null, "reverse": boolean, "mode": "cook"|"steam"|"dough"|"browning"|"sousvide"|"blend"|"warmup"|"slicer"|"grater"|"spiralizer"|"peeler"|null },
   "reason": string }
 Guidance:
-- "machine" = the TM7 actively does it (chop, sauté, simmer, blend, knead, steam, slice, grate, peel…). Fill "setting" (temp 37–160°C only, speed 0–10, "Varoma" to steam, "dough" to knead, accessory modes for cutting/peeling).
-- "prep" = no machine action: ADDING an already-prepared ingredient ("add the diced onion", "pour in the wine"), seasoning to taste, resting, cooling, or plating/serving. Leave "setting" null.
-- "offDevice" = needs equipment the TM7 isn't (oven bake/roast/broil, deep-fry, grill/BBQ). Put the reason in "reason".
+- The TM7 REPLACES the stovetop. Any step done in a pot, pan, skillet, saucepan, wok, or "over heat" on the hob is a "machine" step done in the mixing bowl — sauté, brown (browning mode ≤160°C), simmer, reduce, boil, melt, cook. Do NOT mark stovetop cookware as offDevice.
+- "machine" = the TM7 actively does it (chop, sauté, brown, simmer, boil, blend, knead, steam, slice, grate, peel…). Fill "setting" (temp 37–160°C only, speed 0–10, "Varoma" to steam, "dough" to knead, accessory modes for cutting/peeling). When unsure between machine and offDevice for a heating step, choose machine.
+- "prep" = no machine action: ADDING an already-prepared ingredient ("add the diced onion", "pour in the wine", "fill with water"), seasoning to taste, resting, cooling, or plating/serving. Leave "setting" null.
+- "offDevice" = ONLY oven (bake/roast/broil), deep-frying, grilling/BBQ, or microwave — nothing else. Put the reason in "reason".
 - Keep the draft when it is already correct. Use realistic times (respect any stated in the step).`);
 
   // The response is a JSON array; extract it tolerantly.
