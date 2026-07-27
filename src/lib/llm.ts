@@ -113,8 +113,14 @@ Read all ${count} and return ONE merged recipe.
 - An instruction cut off at the bottom of one image and continued at the top of the next is ONE step.
   Join it.
 - Ingredients may be split across images. Combine them into a single list in the order they appear,
-  never repeating one. If the same ingredient shows up with two different quantities, trust the
-  ingredient list over a passing mention in a step.
+  never repeating one.
+- NEVER ADD QUANTITIES TOGETHER. An ingredient shown in two overlapping images is ONE ingredient with
+  the quantity written on it, not the sum: "1 tbsp olive oil" in image 1 and "1 tbsp olive oil" in
+  image 2 means the recipe uses 1 tbsp, NOT 2 tbsp. The same applies to servings and times.
+  Only if the same ingredient genuinely appears twice in ONE image's ingredient list (two separate
+  lines for two separate uses) should you total it.
+- If the same ingredient shows up with two DIFFERENT quantities, trust the ingredient list over a
+  passing mention in a step.
 - Do not restart step numbering per image.
 - IGNORE everything that is not the recipe: site navigation, ads, cookie banners, newsletter prompts,
   related-recipe cards, comments, reviews, star ratings, author bios and stories, share/print/save

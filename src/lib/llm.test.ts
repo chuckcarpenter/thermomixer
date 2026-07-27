@@ -25,6 +25,16 @@ describe('buildImagePrompt', () => {
     expect(prompt).toContain('comments');
   });
 
+  // Regression: production testing with two overlapping screenshots that each
+  // showed "1 tbsp olive oil" produced 2 tbsp — the model summed the mentions
+  // instead of treating them as one ingredient. Saying "never repeat" wasn't
+  // enough; it has to be told not to total them.
+  it('forbids summing quantities across overlapping images', () => {
+    const prompt = buildImagePrompt(2);
+    expect(prompt).toContain('NEVER ADD QUANTITIES TOGETHER');
+    expect(prompt).toContain('NOT 2 tbsp');
+  });
+
   it('still ends with the shared response shape', () => {
     expect(buildImagePrompt(3)).toContain('Return ONLY a JSON object');
   });
