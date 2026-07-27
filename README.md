@@ -1,15 +1,15 @@
 # 🍲 Thermomixer
 
-Turn recipes you like (from a URL or a photo) into working **Thermomix TM7**
+Turn recipes you like (from a URL or a few photos) into working **Thermomix TM7**
 recipes — each step annotated with time / temperature / speed / reverse — and
 get copy-paste-ready fields for adding them to **Cookidoo**.
 
 ## How it works
 
 ```
-URL  ──► fetch + JSON-LD parse ─┐
-                                ├─► CanonicalRecipe ─► rules engine ─► TMRecipe ─► editor + Cookidoo panel
-photo ─► vision extract ────────┘                       (+ LLM fallback for odd steps)
+URL    ──► fetch + JSON-LD parse ─┐
+                                  ├─► CanonicalRecipe ─► rules engine ─► TMRecipe ─► editor + Cookidoo panel
+photos ─► vision extract (merged) ┘                       (+ LLM fallback for odd steps)
 ```
 
 - **Conversion is deterministic.** A rules engine (`src/lib/tm/rules.ts`) maps
@@ -22,6 +22,11 @@ photo ─► vision extract ────────┘                       (+
 - **The LLM only does extraction** (vision for photos, parsing pages with no
   structured data) and proposes settings for steps the rules can't map — and
   every such suggestion is re-validated by the same guardrails.
+- **A recipe rarely fits in one screenshot**, so the photo tab takes up to 8 at
+  once — pick several, paste them, drop them, or (on Android) share them straight
+  to the app from the OS share sheet. They're treated as pages of a *single*
+  recipe and merged by one vision call, with overlapping shots de-duplicated.
+  Each is downscaled in the browser first, so the upload stays small.
 - **Cookidoo has no public API**, so we produce a clean, paste-ready recipe for
   its "Created Recipes" editor (My Recipes → Created Recipes → Create recipe).
 
@@ -58,6 +63,10 @@ overriding those. See `.env.example`.
 
 - Some large sites (AllRecipes, Serious Eats) hard-block server fetches — use
   the **photo** or **paste-text** options for those.
+- Sharing to the app from the OS share sheet needs **Web Share Target**, which
+  Android Chrome supports and iOS Safari does not. On iPhone, screenshot then
+  paste or pick the photos instead. An app installed before this shipped may need
+  reinstalling before it shows up in the share sheet.
 - Converted settings are sensible starting points you tweak in the editor, not
   guaranteed bakes. Always sanity-check before cooking.
 
