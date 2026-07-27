@@ -36,7 +36,7 @@ export async function ingestFromUrl(url: string): Promise<CanonicalRecipe> {
   if (viaLlm && viaLlm.ingredients.length) return viaLlm;
 
   throw new Error(
-    'No structured recipe data found, and no ANTHROPIC_API_KEY is set for the AI fallback. ' +
+    'No structured recipe data found, and no AI_GATEWAY_API_KEY is set for the AI fallback. ' +
       'Try pasting the recipe text or a photo.',
   );
 }
