@@ -90,16 +90,65 @@ async function complete(
   return res.choices[0]?.message?.content ?? '';
 }
 
-/** Vision: extract a recipe from a photo/screenshot. */
-export async function extractFromImage(
-  base64: string,
-  mimeType: string,
-): Promise<CanonicalRecipe | null> {
-  if (!hasLLM()) return null;
-  const text = await complete([
-    { type: 'text', text: `Extract the recipe from this image. ${RECIPE_SHAPE}` },
-    { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
-  ]);
+export interface ImageInput {
+  base64: string;
+  mimeType: string;
+}
+
+/**
+ * Pure. The prompt for N images of ONE recipe. The single-image string is
+ * deliberately byte-identical to the pre-multi-photo version, so the path that
+ * already worked can't regress.
+ */
+export function buildImagePrompt(count: number): string {
+  if (count <= 1) return `Extract the recipe from this image. ${RECIPE_SHAPE}`;
+  return `These ${count} images are pages or screenshots of ONE single recipe, given in order.
+Read all ${count} and return ONE merged recipe.
+
+- Treat them as one continuous document: image 1 first, then image 2, and so on.
+- The images MAY OVERLAP — the same ingredient or instruction can appear in two of them. Emit it ONCE.
+  Two instructions are the same step if they describe the same action on the same ingredients, even
+  when the wording differs; keep the clearer wording. Do not drop a step that the recipe genuinely
+  repeats (e.g. "blend again for 10 seconds").
+- An instruction cut off at the bottom of one image and continued at the top of the next is ONE step.
+  Join it.
+- Ingredients may be split across images. Combine them into a single list in the order they appear,
+  never repeating one. If the same ingredient shows up with two different quantities, trust the
+  ingredient list over a passing mention in a step.
+- Do not restart step numbering per image.
+- IGNORE everything that is not the recipe: site navigation, ads, cookie banners, newsletter prompts,
+  related-recipe cards, comments, reviews, star ratings, author bios and stories, share/print/save
+  buttons, app chrome, and the phone status bar.
+- If the title, servings, prep time, or cook time appear more than once, use the most complete version.
+- If the images are plainly different recipes rather than one, extract only the FIRST recipe.
+
+${RECIPE_SHAPE}`;
+}
+
+/**
+ * Pure. One image needs the same budget as before; a merged multi-page recipe
+ * produces proportionally more JSON. Capped at 8192 so this non-streaming
+ * request can't run long enough to time out.
+ */
+export function maxTokensForImages(count: number): number {
+  return Math.min(8192, 2048 + Math.max(0, count - 1) * 1024);
+}
+
+/** Vision: extract one recipe from one or more photos/screenshots of it. */
+export async function extractFromImages(images: ImageInput[]): Promise<CanonicalRecipe | null> {
+  if (!hasLLM() || !images.length) return null;
+  const text = await complete(
+    [
+      { type: 'text', text: buildImagePrompt(images.length) },
+      // Images follow the text, in order — that ordering is what makes the
+      // prompt's "given in order" instruction mean anything.
+      ...images.map((img) => ({
+        type: 'image_url' as const,
+        image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+      })),
+    ],
+    maxTokensForImages(images.length),
+  );
   const raw = parseJson<any>(text);
   return raw ? normalizeRecipe(raw) : null;
 }
