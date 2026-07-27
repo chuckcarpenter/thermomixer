@@ -1,0 +1,28 @@
+# The gate CONTRIBUTING.md already asks contributors to run before opening a PR:
+# `npm test && npm run build`. This just enforces it.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # package.json requires >=22.12.
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests (conversion core + ingest)
+        run: npm test
+
+      - name: Production build
+        run: npm run build
