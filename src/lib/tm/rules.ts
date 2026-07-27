@@ -304,7 +304,18 @@ const OVEN_PRIMARY = /\b(bake|roast|broil|pre\s*heat)\b|\b(in|into)\s+(a\s+|the\
 // Cues that the oven is a *future / secondary* action, not this step's job
 // (e.g. "these will finish cooking in the oven"). Then the step's real action
 // (boil, mix, …) is what we convert.
-const OVEN_SECONDARY = /\b(will|finish|finishes|finishing|later|then\b.*\boven|after)\b/i;
+//
+// A cue has to mark the deferral itself, not merely appear somewhere in the
+// step. Matching a bare "finish" or "after" anywhere cancelled genuine bakes —
+// "Bake in the oven for 10 minutes to finish" and "Roast, turning after 15
+// minutes" are both the oven doing THIS step's work. So only unambiguous
+// deferrals suppress: a modal future ("will …", "they'll …"), an explicit
+// "later", the oven trailing a "then", or a back-reference to an oven step that
+// already happened ("after baking"). Anything ambiguous ("finish cooking in the
+// oven" — imperative or not?) stays flagged: a review warning beats faking a
+// bake the TM7 can't do.
+const OVEN_SECONDARY =
+  /\b(will|['’]ll|later)\b|\bthen\b.*\boven\b|\bafter\s+(baking|roasting|broiling|the\s+oven)\b/i;
 
 /** If a step fundamentally needs an appliance the TM7 can't be, return a short
  * label describing what's needed; otherwise null. */
