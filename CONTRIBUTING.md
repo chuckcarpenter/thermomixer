@@ -29,10 +29,15 @@ src/lib/tm/          The conversion core — PURE, no I/O, fully unit-tested
   ├─ scale.ts        Servings / time scaling
   └─ format.ts       Rendering settings to text (Cookidoo, Markdown)
 src/lib/ingest/      URL + image ingestion → CanonicalRecipe
+src/lib/image/       Browser-side photo prep (downscale) + PWA share-target inbox
 src/lib/llm.ts       The ONLY place that calls a model (extraction + fallback)
 src/components/      Preact UI islands
 src/pages/api/       Server endpoints (ingest, convert)
 ```
+
+`src/lib/image/` is the one part of `src/lib/` that runs only in the browser (it
+uses `Image`/`canvas`/`CacheStorage`). It touches the DOM only inside function
+bodies, so the pure helpers stay importable — and unit-testable — under node.
 
 **Architectural rule:** keep `src/lib/tm/` pure and deterministic. No network,
 no model calls, no `process.env` in there — that's what makes it testable and
