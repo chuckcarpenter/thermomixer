@@ -115,10 +115,46 @@ describe('off-device + explicit temperature parsing', () => {
 
   it('does NOT flag a step whose oven mention is secondary ("will finish in the oven")', () => {
     expect(detectOffDevice('Cook the noodles, they will finish cooking in the oven')).toBeNull();
+    expect(detectOffDevice('These will finish cooking in the oven.')).toBeNull();
   });
 
   it('still flags an oven step with no in-range temperature', () => {
     expect(detectOffDevice('Cook in a 350 degree F oven for 30 minutes')).toBe('oven');
+  });
+
+  // A trailing "to finish" means the oven IS doing this step's work. A bare
+  // "finish" anywhere in the text used to cancel the detection, so a real bake
+  // was emitted as ordinary prep and the recipe read as fully TM7-doable.
+  it('flags a bake that ends with "to finish" (the oven IS this step)', () => {
+    expect(detectOffDevice('Bake in the oven at 200°C for 10 minutes to finish.')).toBe('oven');
+  });
+
+  it('flags an oven transfer + bake', () => {
+    expect(detectOffDevice('Transfer to a 350°F oven and bake 30 minutes.')).toBe('oven');
+  });
+
+  // "after" over-matched the same way — a plain duration is not a back-reference
+  // to an oven step that already happened.
+  it('flags a roast that times a stir with "after"', () => {
+    expect(detectOffDevice('Roast the vegetables, turning after 15 minutes.')).toBe('oven');
+  });
+
+  it('does NOT flag a step that back-references an earlier bake', () => {
+    expect(detectOffDevice('Slice the loaf after baking in the oven.')).toBeNull();
+  });
+
+  it('an in-range "to finish" bake still reaches deviceWarnings', () => {
+    // 150°C is inside TM7 range, so only the oven detection can flag this step.
+    const out = convertRecipe({
+      title: 'Gratin',
+      ingredients: [],
+      steps: [
+        'Mix the potatoes and cream.',
+        'Transfer to a 150°C oven and bake 20 minutes to finish.',
+      ],
+    });
+    expect(out.tmSteps[1].needsReview).toBe(true);
+    expect(out.deviceWarnings).toHaveLength(1);
   });
 
   it('does NOT flag a stovetop pan — the TM7 sautés/browns', () => {
